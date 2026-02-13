@@ -1,0 +1,4 @@
+/target
+block_explorer/target
+.env
+block_explorer/.env

@@ -1,0 +1,14 @@
+[workspace]
+resolver = "2"
+members = ["block_explorer"]
+
+[package]
+name = "tessera"
+version = "0.1.0"
+edition = "2021"
+description = "Block space explorer — Tessera"
+
+[dependencies]
+block_explorer = { path = "block_explorer" }
+bevy = "0.15"
+dotenvy = "0.15"
