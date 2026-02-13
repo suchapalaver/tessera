@@ -1,4 +1,5 @@
 /target
 block_explorer/target
+block_explorer/Cargo.lock
 .env
 block_explorer/.env

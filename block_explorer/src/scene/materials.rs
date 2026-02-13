@@ -2,12 +2,6 @@
 
 use bevy::prelude::*;
 
-pub fn block_slab_material(
-    materials: &mut ResMut<Assets<StandardMaterial>>,
-) -> Handle<StandardMaterial> {
-    block_slab_material_with_fullness(materials, 0.5)
-}
-
 pub fn block_slab_material_with_fullness(
     materials: &mut ResMut<Assets<StandardMaterial>>,
     fullness: f32,

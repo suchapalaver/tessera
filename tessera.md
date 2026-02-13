@@ -50,7 +50,7 @@ From the repo root: `cargo run` runs the **tessera** binary; `cargo run -p block
 
 - [ ] `cargo init block_explorer`
 - [ ] Set up `Cargo.toml` with pinned deps:
-  - `bevy = "0.15"`, `alloy = "0.12"` (features: `provider-http`, `rpc-types`)
+  - `bevy = "0.15"`, `alloy = "1.0"` (features: `provider-http`, `rpc-types`)
   - `tokio = "1"` (features: `rt`, `time`), `crossbeam-channel = "0.5"`
   - `dotenvy = "0.15"` for `.env` loading
 - [ ] Create directory structure above (empty `mod.rs` files with public re-exports)

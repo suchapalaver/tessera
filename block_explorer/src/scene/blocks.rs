@@ -19,19 +19,8 @@ pub struct BlockSlab {
 
 const MAX_BLOCKS_PER_FRAME: usize = 5;
 
-pub fn setup_scene(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials_res: ResMut<Assets<StandardMaterial>>,
-) {
+pub fn setup_scene(mut commands: Commands) {
     commands.insert_resource(ExplorerState::default());
-    let material = materials::block_slab_material(&mut materials_res);
-    commands.spawn((
-        Mesh3d(meshes.add(Cuboid::default())),
-        MeshMaterial3d(material),
-        Transform::default(),
-        Visibility::Visible,
-    ));
     commands.spawn((
         Camera3d::default(),
         Transform::from_xyz(0., 5., 10.).looking_at(Vec3::ZERO, Vec3::Y),
