@@ -6,7 +6,7 @@ description = "3D block space explorer — EVM blocks as slabs, transactions as 
 
 [dependencies]
 bevy = "0.15"
-alloy = { version = "1.0", features = ["provider-http", "rpc-types"] }
+alloy = { version = "1.0", features = ["provider-http", "rpc-types", "consensus", "network"] }
 tokio = { version = "1", features = ["rt-multi-thread", "time"] }
 crossbeam-channel = "0.5"
 dotenvy = "0.15"

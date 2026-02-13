@@ -1,19 +1,148 @@
 //! EVM block fetcher: dedicated thread + alloy → BlockPayload.
-//! TODO: implement with alloy provider, backfill + poll, send on channel.
 
-use crossbeam_channel::Receiver;
+use alloy::eips::BlockNumberOrTag;
+use alloy::providers::{Provider, ProviderBuilder};
+use alloy::rpc::types::BlockTransactions;
+use crossbeam_channel::{Receiver, Sender};
 use std::thread;
+use std::time::Duration;
 
-use crate::data::model::BlockPayload;
+use crate::data::model::{BlockPayload, TxPayload};
+
+const BACKFILL_COUNT: u64 = 20;
+const POLL_INTERVAL: Duration = Duration::from_secs(2);
 
 /// Spawns a thread that runs an internal tokio runtime and pushes
-/// block payloads onto the returned channel. Backfill last N, then poll.
-pub fn spawn_evm_fetcher(_rpc_url: String) -> Receiver<BlockPayload> {
+/// block payloads onto the returned channel. Backfills last 20, then polls.
+pub fn spawn_evm_fetcher(rpc_url: String) -> Receiver<BlockPayload> {
     let (tx, rx) = crossbeam_channel::bounded(64);
     thread::spawn(move || {
-        // Stub: no RPC calls yet. Keeps channel open; real impl will
-        // run tokio runtime, fetch blocks, tx.send(payload).
-        let _ = tx;
+        let rt = match tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+        {
+            Ok(rt) => rt,
+            Err(err) => {
+                eprintln!("tessera: failed to build tokio runtime: {err}");
+                return;
+            }
+        };
+        rt.block_on(fetcher_loop(rpc_url, tx));
     });
     rx
+}
+
+async fn fetcher_loop(rpc_url: String, tx: Sender<BlockPayload>) {
+    let url = match rpc_url.parse() {
+        Ok(u) => u,
+        Err(err) => {
+            eprintln!("tessera: invalid RPC URL {rpc_url:?}: {err}");
+            return;
+        }
+    };
+
+    let provider = ProviderBuilder::new().connect_http(url);
+
+    let latest = match provider.get_block_number().await {
+        Ok(n) => n,
+        Err(err) => {
+            eprintln!("tessera: failed to get latest block number: {err}");
+            return;
+        }
+    };
+
+    let start = latest.saturating_sub(BACKFILL_COUNT - 1);
+    eprintln!("tessera: backfilling blocks {start}..={latest}");
+
+    for n in start..=latest {
+        if fetch_and_send(&provider, n, &tx).await.is_err() {
+            return;
+        }
+    }
+
+    eprintln!("tessera: backfill complete, polling for new blocks");
+
+    let mut last_seen = latest;
+    loop {
+        tokio::time::sleep(POLL_INTERVAL).await;
+
+        let tip = match provider.get_block_number().await {
+            Ok(n) => n,
+            Err(err) => {
+                eprintln!("tessera: poll error: {err}");
+                continue;
+            }
+        };
+
+        for n in (last_seen + 1)..=tip {
+            if fetch_and_send(&provider, n, &tx).await.is_err() {
+                return;
+            }
+        }
+        last_seen = tip;
+    }
+}
+
+/// Fetch a single block and send its payload on the channel.
+/// Returns `Err(())` if the channel is closed (receiver dropped).
+async fn fetch_and_send(
+    provider: &impl Provider,
+    number: u64,
+    tx: &Sender<BlockPayload>,
+) -> Result<(), ()> {
+    let block = match provider
+        .get_block_by_number(BlockNumberOrTag::Number(number))
+        .full()
+        .await
+    {
+        Ok(Some(block)) => block,
+        Ok(None) => {
+            eprintln!("tessera: block {number} not found");
+            return Ok(());
+        }
+        Err(err) => {
+            eprintln!("tessera: failed to fetch block {number}: {err}");
+            return Ok(());
+        }
+    };
+
+    let payload = block_to_payload(&block);
+    tx.send(payload).map_err(|_| ())
+}
+
+fn block_to_payload(block: &alloy::rpc::types::Block) -> BlockPayload {
+    let header = &block.header;
+
+    let transactions: Vec<TxPayload> = match &block.transactions {
+        BlockTransactions::Full(txs) => txs.iter().map(tx_to_payload).collect(),
+        _ => Vec::new(),
+    };
+
+    BlockPayload {
+        number: header.number,
+        gas_used: header.gas_used,
+        gas_limit: header.gas_limit,
+        timestamp: header.timestamp,
+        tx_count: transactions.len() as u32,
+        transactions,
+    }
+}
+
+fn tx_to_payload(tx: &alloy::rpc::types::Transaction) -> TxPayload {
+    use alloy::consensus::Transaction as TxConsensus;
+    use alloy::network::TransactionResponse;
+
+    TxPayload {
+        hash: Some(format!("{}", tx.tx_hash())),
+        gas: tx.gas_limit(),
+        gas_price: TxConsensus::gas_price(tx).unwrap_or(0) as u64,
+        value_eth: wei_to_eth(tx.value()),
+        from: Some(format!("{}", TransactionResponse::from(tx))),
+        to: tx.to().map(|addr| format!("{addr}")),
+    }
+}
+
+fn wei_to_eth(wei: alloy::primitives::U256) -> f64 {
+    let wei_u128: u128 = wei.try_into().unwrap_or(u128::MAX);
+    wei_u128 as f64 / 1e18
 }
