@@ -76,6 +76,12 @@ fn fly_camera_system(
         direction -= Vec3::Y;
     }
 
+    // --- Reset: Home or Space resets camera to start ---
+    if keys.just_pressed(KeyCode::Home) || keys.just_pressed(KeyCode::Space) {
+        *transform = Transform::from_xyz(0.0, 5.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y);
+        return;
+    }
+
     if direction != Vec3::ZERO {
         let speed = if keys.pressed(KeyCode::ShiftLeft) {
             MOVE_SPEED * SPRINT_MULTIPLIER
