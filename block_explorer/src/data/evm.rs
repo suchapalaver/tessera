@@ -107,6 +107,10 @@ async fn fetch_and_send(
     };
 
     let payload = block_to_payload(&block);
+    eprintln!(
+        "tessera: block {} ({} txs, gas {}/{})",
+        payload.number, payload.tx_count, payload.gas_used, payload.gas_limit
+    );
     tx.send(payload).map_err(|_| ())
 }
 
