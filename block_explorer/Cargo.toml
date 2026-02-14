@@ -10,6 +10,7 @@ alloy = { version = "1.0", features = ["provider-http", "rpc-types", "consensus"
 tokio = { version = "1", features = ["rt-multi-thread", "time"] }
 crossbeam-channel = "0.5"
 dotenvy = "0.15"
+bevy_egui = "0.33"
 
 [dev-dependencies]
 testcontainers-modules = { version = "0.14", features = ["anvil"] }

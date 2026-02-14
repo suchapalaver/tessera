@@ -2,6 +2,7 @@
 
 use crate::data::{BlockChannel, BlockPayload};
 use crate::scene::materials;
+use crate::ui::HudState;
 use bevy::prelude::*;
 
 /// Tracks how many blocks we've rendered and current Z position.
@@ -11,10 +12,14 @@ pub struct ExplorerState {
     pub z_cursor: f32,
 }
 
-/// Marker for slab entities.
+/// Marker + data for slab entities.
 #[derive(Component)]
 pub struct BlockSlab {
     pub number: u64,
+    pub gas_used: u64,
+    pub gas_limit: u64,
+    pub timestamp: u64,
+    pub tx_count: u32,
 }
 
 const MAX_BLOCKS_PER_FRAME: usize = 5;
@@ -41,11 +46,13 @@ pub fn ingest_blocks(
     mut state: ResMut<ExplorerState>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials_res: ResMut<Assets<StandardMaterial>>,
+    mut hud_state: ResMut<HudState>,
 ) {
     let mut received = 0usize;
     while received < MAX_BLOCKS_PER_FRAME {
         match channel.0.try_recv() {
             Ok(payload) => {
+                hud_state.update_from_payload(&payload);
                 spawn_block_slab(
                     &mut commands,
                     &payload,
@@ -81,8 +88,13 @@ fn spawn_block_slab(
         MeshMaterial3d(material),
         Transform::from_xyz(0.0, 0.0, state.z_cursor),
         Visibility::Visible,
+        PickingBehavior::default(),
         BlockSlab {
             number: payload.number,
+            gas_used: payload.gas_used,
+            gas_limit: payload.gas_limit,
+            timestamp: payload.timestamp,
+            tx_count: payload.tx_count,
         },
     ));
     crate::scene::transactions::spawn_tx_cubes(

@@ -1,7 +1,10 @@
 //! Tessera — block space explorer. Runs the block_explorer app.
 
 use bevy::prelude::*;
-use block_explorer::{config, fly_camera_plugin, ingest_blocks, init_block_channel, setup_scene};
+use block_explorer::{
+    config, fly_camera_plugin, hud_plugin, ingest_blocks, init_block_channel, inspector_plugin,
+    setup_scene,
+};
 
 fn main() {
     let _ = dotenvy::dotenv();
@@ -20,6 +23,8 @@ fn main() {
         .insert_resource(ClearColor(Color::srgb(0.05, 0.05, 0.08)))
         .insert_resource(channel)
         .add_plugins(fly_camera_plugin)
+        .add_plugins(hud_plugin)
+        .add_plugins(inspector_plugin)
         .add_systems(Startup, setup_scene)
         .add_systems(Update, ingest_blocks)
         .run();

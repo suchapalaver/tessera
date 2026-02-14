@@ -6,7 +6,14 @@ use bevy::prelude::*;
 use super::materials;
 
 #[derive(Component)]
-pub struct TxCube;
+pub struct TxCube {
+    pub hash: Option<String>,
+    pub gas: u64,
+    pub gas_price: u64,
+    pub value_eth: f64,
+    pub from: Option<String>,
+    pub to: Option<String>,
+}
 
 const GRID_SPACING: f32 = 0.25;
 const CUBE_BASE: f32 = 0.2;
@@ -45,7 +52,14 @@ pub fn spawn_tx_cubes(
             MeshMaterial3d(material),
             Transform::from_xyz(pos.0, y, z + pos.1),
             Visibility::Visible,
-            TxCube,
+            TxCube {
+                hash: tx.hash.clone(),
+                gas: tx.gas,
+                gas_price: tx.gas_price,
+                value_eth: tx.value_eth,
+                from: tx.from.clone(),
+                to: tx.to.clone(),
+            },
         ));
     }
 }
