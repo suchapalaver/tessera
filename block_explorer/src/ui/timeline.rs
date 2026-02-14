@@ -137,14 +137,14 @@ fn playback_system(
     state.playback_timer += time.delta_secs() * state.speed;
 
     if state.playback_timer >= 1.0 {
-        state.playback_timer = 0.0;
-
         if state.current_index + 1 < registry.entries.len() {
+            state.playback_timer = 0.0;
             state.current_index += 1;
             let z = registry.entries[state.current_index].z_position;
             jump_to_block(z, &mut camera_target);
         } else {
-            state.playing = false;
+            // At the end — keep playing but wait for new blocks to arrive
+            state.playback_timer = 1.0;
         }
     }
 }
