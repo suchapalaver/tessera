@@ -47,6 +47,7 @@ pub fn ingest_blocks(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials_res: ResMut<Assets<StandardMaterial>>,
     mut hud_state: ResMut<HudState>,
+    mut images: ResMut<Assets<Image>>,
 ) {
     let mut received = 0usize;
     while received < MAX_BLOCKS_PER_FRAME {
@@ -59,6 +60,7 @@ pub fn ingest_blocks(
                     &mut state,
                     &mut meshes,
                     &mut materials_res,
+                    &mut images,
                 );
                 received += 1;
             }
@@ -73,6 +75,7 @@ fn spawn_block_slab(
     state: &mut ResMut<ExplorerState>,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials_res: &mut ResMut<Assets<StandardMaterial>>,
+    images: &mut ResMut<Assets<Image>>,
 ) {
     let fullness = if payload.gas_limit > 0 {
         payload.gas_used as f32 / payload.gas_limit as f32
@@ -97,7 +100,15 @@ fn spawn_block_slab(
             tx_count: payload.tx_count,
         },
     ));
-    crate::scene::labels::spawn_block_label(commands, payload.number, state.z_cursor);
+    crate::scene::labels::spawn_block_labels(
+        commands,
+        images,
+        materials_res,
+        meshes,
+        payload.number,
+        state.z_cursor,
+        width,
+    );
     crate::scene::transactions::spawn_tx_cubes(
         commands,
         payload,

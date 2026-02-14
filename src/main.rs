@@ -2,8 +2,8 @@
 
 use bevy::prelude::*;
 use block_explorer::{
-    billboard_labels_system, config, fly_camera_plugin, hud_plugin, ingest_blocks,
-    init_block_channel, inspector_plugin, label_distance_cull_system, setup_scene,
+    config, fly_camera_plugin, hud_plugin, ingest_blocks, init_block_channel, inspector_plugin,
+    setup_scene,
 };
 
 fn main() {
@@ -26,13 +26,6 @@ fn main() {
         .add_plugins(hud_plugin)
         .add_plugins(inspector_plugin)
         .add_systems(Startup, setup_scene)
-        .add_systems(
-            Update,
-            (
-                ingest_blocks,
-                billboard_labels_system,
-                label_distance_cull_system,
-            ),
-        )
+        .add_systems(Update, ingest_blocks)
         .run();
 }
