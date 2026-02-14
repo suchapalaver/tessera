@@ -9,6 +9,7 @@ pub mod scene;
 pub mod ui;
 
 pub use camera::{fly_camera_plugin, CameraTarget};
+pub use data::evm::EvmFetcher;
 pub use data::{
     init_block_channel, BlockChannel, BlockPayload, ChainFetcher, FetcherConfig, TxPayload,
 };

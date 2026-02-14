@@ -1,5 +1,5 @@
 mod channel;
-mod evm;
+pub mod evm;
 mod model;
 #[allow(dead_code)]
 mod solana;
