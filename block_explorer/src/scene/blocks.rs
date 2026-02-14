@@ -213,3 +213,26 @@ fn spawn_block_slab(
         images,
     );
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn setup_scene_inserts_resources_and_entities() {
+        let mut app = App::new();
+        app.add_systems(Startup, setup_scene);
+
+        app.update();
+
+        assert!(app.world().get_resource::<ExplorerState>().is_some());
+        assert!(app.world().get_resource::<BlockRegistry>().is_some());
+
+        let world = app.world_mut();
+        let camera_count = world.query::<&Camera3d>().iter(world).count();
+        let light_count = world.query::<&DirectionalLight>().iter(world).count();
+
+        assert!(camera_count >= 1);
+        assert!(light_count >= 1);
+    }
+}

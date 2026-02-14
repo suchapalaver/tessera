@@ -161,3 +161,22 @@ fn wei_to_eth(wei: alloy::primitives::U256) -> f64 {
     let wei_u128: u128 = wei.try_into().unwrap_or(u128::MAX);
     wei_u128 as f64 / 1e18
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloy::primitives::U256;
+
+    #[test]
+    fn wei_to_eth_converts_1_eth() {
+        let wei = U256::from(1_000_000_000_000_000_000u128);
+        let eth = wei_to_eth(wei);
+        assert!((eth - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn wei_to_eth_handles_zero() {
+        let eth = wei_to_eth(U256::ZERO);
+        assert_eq!(eth, 0.0);
+    }
+}

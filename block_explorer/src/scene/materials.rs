@@ -107,3 +107,42 @@ fn gas_price_color(gwei: f64) -> Color {
         Color::srgb(1.0, 1.0 - s, 0.0)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloy::primitives::{Address, B256};
+
+    fn tx_with_gas(gwei: u64, tx_index: usize) -> TxPayload {
+        TxPayload {
+            hash: B256::ZERO,
+            tx_index,
+            gas: 21_000,
+            gas_price: (gwei as u128) * 1_000_000_000u128,
+            value_eth: 0.0,
+            from: Address::ZERO,
+            to: None,
+            blob_count: 0,
+            max_fee_per_blob_gas: None,
+        }
+    }
+
+    #[test]
+    fn heatmap_image_has_expected_size_and_colors() {
+        let txs = vec![tx_with_gas(0, 0), tx_with_gas(200, 1)];
+        let image = generate_heatmap_image(&txs);
+
+        let width = image.texture_descriptor.size.width as usize;
+        let height = image.texture_descriptor.size.height as usize;
+
+        assert_eq!(width, 2);
+        assert_eq!(height, 16);
+        assert_eq!(image.data.len(), width * height * 4);
+
+        let first = &image.data[0..4];
+        let second = &image.data[4..8];
+
+        assert_eq!(first, &[0, 0, 255, 255]);
+        assert_eq!(second, &[255, 0, 0, 255]);
+    }
+}

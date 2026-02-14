@@ -16,5 +16,6 @@ bevy_egui = "0.33"
 
 [dev-dependencies]
 testcontainers-modules = { version = "0.14", features = ["anvil"] }
-tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
-alloy = { version = "1.0", features = ["provider-http", "rpc-types", "consensus", "network"] }
+
+[features]
+integration = []

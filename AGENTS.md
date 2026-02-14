@@ -10,7 +10,8 @@
 - `cargo run --release` runs the optimized build (recommended for smooth rendering).
 - `cargo run` runs a debug build for faster iteration.
 - `cargo build` builds the workspace without running.
-- `cargo test` runs unit, smoke, and integration tests (if present).
+- `cargo test` runs unit and smoke tests.
+- `cargo test --features integration` runs the Anvil-backed integration tests.
 - `cargo test -- --nocapture` shows test logging, useful for debugging.
 
 ## Coding Style & Naming Conventions

@@ -37,3 +37,89 @@ pub fn chain_config() -> FetcherConfig {
         rpc_url: url,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{Mutex, OnceLock};
+
+    static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+
+    fn lock_env() -> std::sync::MutexGuard<'static, ()> {
+        ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap()
+    }
+
+    struct EnvGuard {
+        snapshot: Vec<(&'static str, Option<String>)>,
+    }
+
+    impl EnvGuard {
+        fn capture(keys: &[&'static str]) -> Self {
+            let snapshot = keys
+                .iter()
+                .map(|&key| (key, std::env::var(key).ok()))
+                .collect();
+            Self { snapshot }
+        }
+    }
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            for (key, value) in &self.snapshot {
+                match value {
+                    Some(val) => std::env::set_var(key, val),
+                    None => std::env::remove_var(key),
+                }
+            }
+        }
+    }
+
+    const ENV_KEYS: [&str; 5] = [
+        "MAINNET_RPC_URL",
+        "BASE_RPC_URL",
+        "OPTIMISM_RPC_URL",
+        "ARBITRUM_RPC_URL",
+        "RPC_URL",
+    ];
+
+    #[test]
+    fn chain_specific_env_takes_priority() {
+        let _lock = lock_env();
+        let _guard = EnvGuard::capture(&ENV_KEYS);
+
+        std::env::set_var("MAINNET_RPC_URL", "http://127.0.0.1:8545");
+        std::env::set_var("RPC_URL", "http://127.0.0.1:9999");
+
+        let config = chain_config();
+
+        assert_eq!(config.chain, Chain::mainnet());
+        assert_eq!(config.rpc_url.as_str(), "http://127.0.0.1:8545/");
+    }
+
+    #[test]
+    fn rpc_url_is_used_when_no_chain_envs_present() {
+        let _lock = lock_env();
+        let _guard = EnvGuard::capture(&ENV_KEYS);
+
+        std::env::set_var("RPC_URL", "http://127.0.0.1:8545");
+
+        let config = chain_config();
+
+        assert_eq!(config.chain, Chain::mainnet());
+        assert_eq!(config.rpc_url.as_str(), "http://127.0.0.1:8545/");
+    }
+
+    #[test]
+    fn invalid_chain_env_falls_back_to_rpc_url() {
+        let _lock = lock_env();
+        let _guard = EnvGuard::capture(&ENV_KEYS);
+
+        std::env::set_var("MAINNET_RPC_URL", "not-a-url");
+        std::env::set_var("RPC_URL", "http://127.0.0.1:8545");
+
+        let config = chain_config();
+
+        assert_eq!(config.chain, Chain::mainnet());
+        assert_eq!(config.rpc_url.as_str(), "http://127.0.0.1:8545/");
+    }
+}

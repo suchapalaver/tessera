@@ -198,3 +198,21 @@ fn format_timestamp(ts: u64) -> String {
     let hours = (ts / 3600) % 24;
     format!("{hours:02}:{mins:02}:{secs:02} UTC")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn format_gas_formats_units() {
+        assert_eq!(format_gas(999), "999");
+        assert_eq!(format_gas(1_500), "1.5K");
+        assert_eq!(format_gas(2_000_000), "2.0M");
+    }
+
+    #[test]
+    fn format_timestamp_formats_hh_mm_ss() {
+        assert_eq!(format_timestamp(0), "00:00:00 UTC");
+        assert_eq!(format_timestamp(3661), "01:01:01 UTC");
+    }
+}
