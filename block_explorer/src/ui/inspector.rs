@@ -243,20 +243,19 @@ fn show_tx_panel(contexts: &mut EguiContexts, tx: &TxCube) {
             );
             ui.add_space(8.0);
 
-            if let Some(ref hash) = tx.hash {
-                ui.label(format!("Hash  {}", abbreviate(hash, 10, 6)));
-            }
+            ui.label(format!("Hash  {}", abbreviate(&tx.hash, 10, 6)));
             ui.add_space(4.0);
 
-            if let Some(ref from) = tx.from {
-                ui.label(format!("From  {}", abbreviate(from, 8, 6)));
-            }
-            if let Some(ref to) = tx.to {
-                let display = if let Some(name) = known_contract_label(to) {
-                    name.to_string()
-                } else {
-                    abbreviate(to, 8, 6)
-                };
+            let from_display = format!("{}", tx.from);
+            ui.label(format!("From  {}", abbreviate(&from_display, 8, 6)));
+            if let Some(to_addr) = tx.to {
+                let display =
+                    if let Some(name) = crate::scene::contracts::known_contract_name(&to_addr) {
+                        name.to_string()
+                    } else {
+                        let s = format!("{to_addr}");
+                        abbreviate(&s, 8, 6)
+                    };
                 ui.label(format!("To    {display}"));
             } else {
                 ui.label(
@@ -270,7 +269,7 @@ fn show_tx_panel(contexts: &mut EguiContexts, tx: &TxCube) {
             ui.label(format!(
                 "Gas     {} ({:.2} gwei)",
                 format_number(tx.gas),
-                tx.gas_price as f64 / 1e9
+                tx.gas_price as f64 / 1e9,
             ));
             ui.add_space(4.0);
 
@@ -314,23 +313,6 @@ fn dismiss_hint(ui: &mut egui::Ui) {
             .size(11.0)
             .color(egui::Color32::from_rgb(120, 120, 140)),
     );
-}
-
-fn known_contract_label(address: &str) -> Option<&'static str> {
-    let addr = address.to_lowercase();
-    match addr.as_str() {
-        "0xdac17f958d2ee523a2206206994597c13d831ec7" => Some("USDT"),
-        "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48" => Some("USDC"),
-        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2" => Some("WETH"),
-        "0x7a250d5630b4cf539739df2c5dacb4c659f2488d" => Some("UniV2Router"),
-        "0xe592427a0aece92de3edee1f18e0157c05861564" => Some("UniV3Router"),
-        "0x68b3465833fb72a70ecdf485e0e4c7bd8665fc45" => Some("UniRouter2"),
-        "0x3fc91a3afd70395cd496c647d5a6cc9d4b2b7fad" => Some("UniRouter"),
-        "0x1111111254eeb25477b68fb85ed929f73a960582" => Some("1inch"),
-        "0x881d40237659c251811cec9c364ef91dc08d300c" => Some("Metamask"),
-        "0x7d1afa7b718fb893db30a3abc0cfc608aacfebb0" => Some("MATIC"),
-        _ => None,
-    }
 }
 
 fn format_number(n: u64) -> String {

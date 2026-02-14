@@ -2,6 +2,8 @@
 
 use std::collections::HashMap;
 
+use alloy::primitives::Address;
+
 use crate::data::{BlockPayload, TxPayload};
 use bevy::prelude::*;
 
@@ -9,17 +11,17 @@ use super::materials;
 
 #[derive(Component)]
 pub struct TxCube {
-    pub hash: Option<String>,
+    pub hash: String,
     pub tx_index: usize,
     pub gas: u64,
-    pub gas_price: u64,
+    pub gas_price: u128,
     pub value_eth: f64,
-    pub from: Option<String>,
-    pub to: Option<String>,
+    pub from: Address,
+    pub to: Option<Address>,
     pub block_number: u64,
     pub world_position: Vec3,
     pub blob_count: usize,
-    pub max_fee_per_blob_gas: Option<u64>,
+    pub max_fee_per_blob_gas: Option<u128>,
 }
 
 const GRID_SPACING: f32 = 0.25;
@@ -29,24 +31,6 @@ const MAX_HEIGHT: f32 = 0.6;
 const SLAB_HEIGHT: f32 = 1.0;
 const SLAB_DEPTH: f32 = 2.0;
 const MAX_CLUSTER_LABELS: usize = 3;
-
-fn known_contract_name(address: &str) -> Option<&'static str> {
-    let addr = address.to_lowercase();
-    // Well-known Ethereum contracts
-    match addr.as_str() {
-        "0xdac17f958d2ee523a2206206994597c13d831ec7" => Some("USDT"),
-        "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48" => Some("USDC"),
-        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2" => Some("WETH"),
-        "0x7a250d5630b4cf539739df2c5dacb4c659f2488d" => Some("UniV2Router"),
-        "0xe592427a0aece92de3edee1f18e0157c05861564" => Some("UniV3Router"),
-        "0x68b3465833fb72a70ecdf485e0e4c7bd8665fc45" => Some("UniRouter2"),
-        "0x3fc91a3afd70395cd496c647d5a6cc9d4b2b7fad" => Some("UniRouter"),
-        "0x1111111254eeb25477b68fb85ed929f73a960582" => Some("1inch"),
-        "0x881d40237659c251811cec9c364ef91dc08d300c" => Some("Metamask"),
-        "0x7d1afa7b718fb893db30a3abc0cfc608aacfebb0" => Some("MATIC"),
-        _ => None,
-    }
-}
 
 pub fn spawn_tx_cubes(
     commands: &mut Commands,
@@ -87,13 +71,13 @@ pub fn spawn_tx_cubes(
             Transform::from_xyz(pos.0, y, z + pos.1),
             Visibility::Visible,
             TxCube {
-                hash: tx.hash.clone(),
+                hash: format!("{}", tx.hash),
                 tx_index: tx.tx_index,
                 gas: tx.gas,
                 gas_price: tx.gas_price,
                 value_eth: tx.value_eth,
-                from: tx.from.clone(),
-                to: tx.to.clone(),
+                from: tx.from,
+                to: tx.to,
                 block_number: payload.number,
                 world_position: world_pos,
                 blob_count: tx.blob_count,
@@ -128,13 +112,12 @@ pub fn spawn_tx_cubes(
 /// Groups transactions by `to` address, sorts groups largest-first, and returns
 /// a flat list in cluster order.
 fn cluster_transactions(txs: &[TxPayload]) -> Vec<&TxPayload> {
-    let mut groups: HashMap<Option<&str>, Vec<&TxPayload>> = HashMap::new();
+    let mut groups: HashMap<Option<Address>, Vec<&TxPayload>> = HashMap::new();
     for tx in txs {
-        let key = tx.to.as_deref();
-        groups.entry(key).or_default().push(tx);
+        groups.entry(tx.to).or_default().push(tx);
     }
 
-    let mut sorted_groups: Vec<(Option<&str>, Vec<&TxPayload>)> = groups.into_iter().collect();
+    let mut sorted_groups: Vec<(Option<Address>, Vec<&TxPayload>)> = groups.into_iter().collect();
     sorted_groups.sort_by(|a, b| b.1.len().cmp(&a.1.len()));
 
     sorted_groups.into_iter().flat_map(|(_, txs)| txs).collect()
@@ -155,22 +138,21 @@ fn spawn_cluster_labels(
 
     // Identify cluster boundaries and labels
     let mut clusters: Vec<(String, usize, usize)> = Vec::new(); // (label, start_idx, end_idx)
-    let mut current_to = ordered_txs[0].to.as_deref();
+    let mut current_to = ordered_txs[0].to;
     let mut start = 0;
 
     for (i, tx) in ordered_txs.iter().enumerate() {
-        let this_to = tx.to.as_deref();
-        if this_to != current_to {
+        if tx.to != current_to {
             if let Some(addr) = current_to {
-                let label = cluster_label(addr);
+                let label = cluster_label(&addr);
                 clusters.push((label, start, i));
             }
-            current_to = this_to;
+            current_to = tx.to;
             start = i;
         }
     }
     if let Some(addr) = current_to {
-        let label = cluster_label(addr);
+        let label = cluster_label(&addr);
         clusters.push((label, start, ordered_txs.len()));
     }
 
@@ -205,16 +187,13 @@ fn spawn_cluster_labels(
     }
 }
 
-fn cluster_label(address: &str) -> String {
-    if let Some(name) = known_contract_name(address) {
+fn cluster_label(addr: &Address) -> String {
+    if let Some(name) = super::contracts::known_contract_name(addr) {
         return name.to_string();
     }
-    // Show abbreviated address
-    if address.len() >= 10 {
-        format!("{}..{}", &address[..6], &address[address.len() - 4..])
-    } else {
-        address.to_string()
-    }
+    // Show abbreviated address (checksummed)
+    let s = format!("{addr}");
+    format!("{}..{}", &s[..6], &s[s.len() - 4..])
 }
 
 fn spawn_cluster_label_quad(

@@ -145,15 +145,15 @@ fn tx_to_payload(index: usize, tx: &alloy::rpc::types::Transaction) -> TxPayload
     let blob_count = TxConsensus::blob_versioned_hashes(tx).map_or(0, |h| h.len());
 
     TxPayload {
-        hash: Some(format!("{}", tx.tx_hash())),
+        hash: tx.tx_hash(),
         tx_index: index,
         gas: tx.gas_limit(),
-        gas_price: TxConsensus::gas_price(tx).unwrap_or(0) as u64,
+        gas_price: TxConsensus::gas_price(tx).unwrap_or(0),
         value_eth: wei_to_eth(tx.value()),
-        from: Some(format!("{}", TransactionResponse::from(tx))),
-        to: tx.to().map(|addr| format!("{addr}")),
+        from: TransactionResponse::from(tx),
+        to: tx.to(),
         blob_count,
-        max_fee_per_blob_gas: TxConsensus::max_fee_per_blob_gas(tx).map(|f| f as u64),
+        max_fee_per_blob_gas: TxConsensus::max_fee_per_blob_gas(tx),
     }
 }
 

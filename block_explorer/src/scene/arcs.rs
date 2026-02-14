@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 
+use alloy::primitives::Address;
 use bevy::prelude::*;
 
 use crate::scene::BlockSlab;
@@ -52,7 +53,7 @@ fn draw_arcs_system(
         .map(|slab| slab.number);
 
     // Build address → centroid position map for the selected block
-    let mut address_positions: HashMap<&str, (Vec3, u32)> = HashMap::new();
+    let mut address_positions: HashMap<Address, (Vec3, u32)> = HashMap::new();
     let mut arcs_data: Vec<(&TxCube,)> = Vec::new();
 
     for tx_cube in tx_cubes.iter() {
@@ -67,17 +68,14 @@ fn draw_arcs_system(
         }
 
         // Accumulate positions for address centroid calculation
-        if let Some(ref addr) = tx_cube.from {
-            let entry = address_positions
-                .entry(addr.as_str())
-                .or_insert((Vec3::ZERO, 0));
-            entry.0 += tx_cube.world_position;
-            entry.1 += 1;
-        }
-        if let Some(ref addr) = tx_cube.to {
-            let entry = address_positions
-                .entry(addr.as_str())
-                .or_insert((Vec3::ZERO, 0));
+        let from_entry = address_positions
+            .entry(tx_cube.from)
+            .or_insert((Vec3::ZERO, 0));
+        from_entry.0 += tx_cube.world_position;
+        from_entry.1 += 1;
+
+        if let Some(addr) = tx_cube.to {
+            let entry = address_positions.entry(addr).or_insert((Vec3::ZERO, 0));
             entry.0 += tx_cube.world_position;
             entry.1 += 1;
         }
@@ -86,7 +84,7 @@ fn draw_arcs_system(
     }
 
     // Compute centroids
-    let centroids: HashMap<&str, Vec3> = address_positions
+    let centroids: HashMap<Address, Vec3> = address_positions
         .into_iter()
         .map(|(addr, (sum, count))| (addr, sum / count as f32))
         .collect();
@@ -101,14 +99,13 @@ fn draw_arcs_system(
             continue;
         }
 
-        let (Some(ref from_addr), Some(ref to_addr)) = (&tx_cube.from, &tx_cube.to) else {
+        let Some(to_addr) = tx_cube.to else {
             continue;
         };
 
-        let (Some(&from_pos), Some(&to_pos)) = (
-            centroids.get(from_addr.as_str()),
-            centroids.get(to_addr.as_str()),
-        ) else {
+        let (Some(&from_pos), Some(&to_pos)) =
+            (centroids.get(&tx_cube.from), centroids.get(&to_addr))
+        else {
             continue;
         };
 

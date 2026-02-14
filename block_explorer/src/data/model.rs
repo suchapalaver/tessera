@@ -1,5 +1,6 @@
-// Chain-agnostic block and transaction payloads.
-// Alloy-specific types stay in evm.rs; conversion happens there.
+// Block and transaction payloads using Alloy primitive types for type safety.
+
+use alloy::primitives::{Address, B256};
 
 /// A single block's summary and its transactions.
 #[derive(Clone, Debug)]
@@ -17,17 +18,13 @@ pub struct BlockPayload {
 /// A single transaction's display-relevant fields.
 #[derive(Clone, Debug)]
 pub struct TxPayload {
-    pub hash: Option<String>,
+    pub hash: B256,
     pub tx_index: usize,
     pub gas: u64,
-    pub gas_price: u64,
+    pub gas_price: u128,
     pub value_eth: f64,
-    pub from: Option<String>,
-    pub to: Option<String>,
+    pub from: Address,
+    pub to: Option<Address>,
     pub blob_count: usize,
-    pub max_fee_per_blob_gas: Option<u64>,
+    pub max_fee_per_blob_gas: Option<u128>,
 }
-
-// Both are used across thread boundaries (fetcher → channel → ECS).
-impl BlockPayload {}
-impl TxPayload {}
