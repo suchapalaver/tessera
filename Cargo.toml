@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = ["block_explorer"]
+default-members = [".", "block_explorer"]
 
 [package]
 name = "tessera"
