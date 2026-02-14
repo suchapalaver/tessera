@@ -10,5 +10,8 @@ pub mod ui;
 
 pub use camera::fly_camera_plugin;
 pub use data::{init_block_channel, BlockChannel, BlockPayload, TxPayload};
-pub use scene::{ingest_blocks, setup_scene, BlockSlab, ExplorerState, TxCube};
+pub use scene::{
+    billboard_labels_system, ingest_blocks, label_distance_cull_system, setup_scene, BlockLabel,
+    BlockSlab, ExplorerState, TxCube,
+};
 pub use ui::{hud_plugin, inspector_plugin, timeline_plugin};

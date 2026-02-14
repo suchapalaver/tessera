@@ -97,6 +97,7 @@ fn spawn_block_slab(
             tx_count: payload.tx_count,
         },
     ));
+    crate::scene::labels::spawn_block_label(commands, payload.number, state.z_cursor);
     crate::scene::transactions::spawn_tx_cubes(
         commands,
         payload,
