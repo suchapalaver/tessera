@@ -3,25 +3,66 @@
 use bevy::input::mouse::MouseWheel;
 use bevy::prelude::*;
 
+/// Optional target for animated camera jumps (set by timeline, cleared on arrival or WASD).
+#[derive(Resource, Default)]
+pub struct CameraTarget {
+    pub target: Option<Vec3>,
+    pub look_at: Option<Vec3>,
+}
+
 pub fn fly_camera_plugin(app: &mut App) {
-    app.add_systems(Update, fly_camera_system);
+    app.init_resource::<CameraTarget>()
+        .add_systems(Update, fly_camera_system);
 }
 
 const MOVE_SPEED: f32 = 8.0;
 const SPRINT_MULTIPLIER: f32 = 3.0;
 const KEY_LOOK_SPEED: f32 = 1.5;
 const SCROLL_LOOK_SPEED: f32 = 0.03;
+const CAMERA_LERP_SPEED: f32 = 4.0;
 
 fn fly_camera_system(
     time: Res<Time>,
     keys: Res<ButtonInput<KeyCode>>,
     mut scroll_events: EventReader<MouseWheel>,
     mut query: Query<&mut Transform, With<Camera3d>>,
+    mut camera_target: ResMut<CameraTarget>,
 ) {
     let Ok(mut transform) = query.get_single_mut() else {
         return;
     };
     let dt = time.delta_secs();
+
+    // WASD input cancels any animated camera target
+    let wasd_pressed = keys.pressed(KeyCode::KeyW)
+        || keys.pressed(KeyCode::KeyA)
+        || keys.pressed(KeyCode::KeyS)
+        || keys.pressed(KeyCode::KeyD)
+        || keys.pressed(KeyCode::KeyQ)
+        || keys.pressed(KeyCode::KeyE);
+
+    if wasd_pressed {
+        camera_target.target = None;
+        camera_target.look_at = None;
+    }
+
+    // Animated camera jump toward target
+    if let Some(target_pos) = camera_target.target {
+        let t = (CAMERA_LERP_SPEED * dt).min(1.0);
+        transform.translation = transform.translation.lerp(target_pos, t);
+
+        if let Some(look_at_pos) = camera_target.look_at {
+            let desired =
+                Transform::from_translation(transform.translation).looking_at(look_at_pos, Vec3::Y);
+            transform.rotation = transform.rotation.slerp(desired.rotation, t);
+        }
+
+        if transform.translation.distance(target_pos) < 0.1 {
+            camera_target.target = None;
+            camera_target.look_at = None;
+        }
+        return;
+    }
 
     // --- Look: arrow keys ---
     let mut yaw = 0.0_f32;

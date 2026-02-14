@@ -118,7 +118,11 @@ fn block_to_payload(block: &alloy::rpc::types::Block) -> BlockPayload {
     let header = &block.header;
 
     let transactions: Vec<TxPayload> = match &block.transactions {
-        BlockTransactions::Full(txs) => txs.iter().map(tx_to_payload).collect(),
+        BlockTransactions::Full(txs) => txs
+            .iter()
+            .enumerate()
+            .map(|(i, tx)| tx_to_payload(i, tx))
+            .collect(),
         _ => Vec::new(),
     };
 
@@ -132,12 +136,13 @@ fn block_to_payload(block: &alloy::rpc::types::Block) -> BlockPayload {
     }
 }
 
-fn tx_to_payload(tx: &alloy::rpc::types::Transaction) -> TxPayload {
+fn tx_to_payload(index: usize, tx: &alloy::rpc::types::Transaction) -> TxPayload {
     use alloy::consensus::Transaction as TxConsensus;
     use alloy::network::TransactionResponse;
 
     TxPayload {
         hash: Some(format!("{}", tx.tx_hash())),
+        tx_index: index,
         gas: tx.gas_limit(),
         gas_price: TxConsensus::gas_price(tx).unwrap_or(0) as u64,
         value_eth: wei_to_eth(tx.value()),

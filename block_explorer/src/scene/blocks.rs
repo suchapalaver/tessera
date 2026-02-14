@@ -22,10 +22,75 @@ pub struct BlockSlab {
     pub tx_count: u32,
 }
 
+/// Entry in the block registry for timeline navigation.
+pub struct BlockEntry {
+    pub number: u64,
+    pub z_position: f32,
+    pub timestamp: u64,
+    pub gas_fullness: f32,
+}
+
+/// Registry of ingested blocks for timeline navigation.
+#[derive(Resource, Default)]
+pub struct BlockRegistry {
+    pub entries: Vec<BlockEntry>,
+}
+
+/// Stores both original and heatmap materials for a slab.
+#[derive(Component)]
+pub struct HeatmapMaterial {
+    pub original: Handle<StandardMaterial>,
+    pub heatmap: Handle<StandardMaterial>,
+}
+
+/// Global toggle for heatmap mode.
+#[derive(Resource, Default)]
+pub struct HeatmapState {
+    pub enabled: bool,
+}
+
+pub fn heatmap_plugin(app: &mut App) {
+    app.init_resource::<HeatmapState>()
+        .add_systems(Update, heatmap_toggle_system);
+}
+
+fn heatmap_toggle_system(
+    keys: Res<ButtonInput<KeyCode>>,
+    mut state: ResMut<HeatmapState>,
+    mut commands: Commands,
+    slabs: Query<(Entity, &HeatmapMaterial)>,
+    tx_cubes: Query<Entity, With<crate::scene::TxCube>>,
+) {
+    if !keys.just_pressed(KeyCode::KeyH) {
+        return;
+    }
+
+    state.enabled = !state.enabled;
+
+    for (entity, heatmap_mat) in &slabs {
+        let mat = if state.enabled {
+            heatmap_mat.heatmap.clone()
+        } else {
+            heatmap_mat.original.clone()
+        };
+        commands.entity(entity).insert(MeshMaterial3d(mat));
+    }
+
+    let visibility = if state.enabled {
+        Visibility::Hidden
+    } else {
+        Visibility::Visible
+    };
+    for entity in &tx_cubes {
+        commands.entity(entity).insert(visibility);
+    }
+}
+
 const MAX_BLOCKS_PER_FRAME: usize = 5;
 
 pub fn setup_scene(mut commands: Commands) {
     commands.insert_resource(ExplorerState::default());
+    commands.insert_resource(BlockRegistry::default());
     commands.spawn((
         Camera3d::default(),
         Transform::from_xyz(0., 5., 10.).looking_at(Vec3::ZERO, Vec3::Y),
@@ -40,6 +105,7 @@ pub fn setup_scene(mut commands: Commands) {
     });
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn ingest_blocks(
     mut commands: Commands,
     channel: Res<BlockChannel>,
@@ -48,6 +114,7 @@ pub fn ingest_blocks(
     mut materials_res: ResMut<Assets<StandardMaterial>>,
     mut hud_state: ResMut<HudState>,
     mut images: ResMut<Assets<Image>>,
+    mut registry: ResMut<BlockRegistry>,
 ) {
     let mut received = 0usize;
     while received < MAX_BLOCKS_PER_FRAME {
@@ -61,6 +128,7 @@ pub fn ingest_blocks(
                     &mut meshes,
                     &mut materials_res,
                     &mut images,
+                    &mut registry,
                 );
                 received += 1;
             }
@@ -76,6 +144,7 @@ fn spawn_block_slab(
     meshes: &mut ResMut<Assets<Mesh>>,
     materials_res: &mut ResMut<Assets<StandardMaterial>>,
     images: &mut ResMut<Assets<Image>>,
+    registry: &mut ResMut<BlockRegistry>,
 ) {
     let fullness = if payload.gas_limit > 0 {
         payload.gas_used as f32 / payload.gas_limit as f32
@@ -83,15 +152,32 @@ fn spawn_block_slab(
         0.0
     };
     let width = 2.0 + 10.0 * fullness;
-    let material = materials::block_slab_material_with_fullness(materials_res, fullness);
+    let original_material = materials::block_slab_material_with_fullness(materials_res, fullness);
+    let heatmap_image = materials::generate_heatmap_image(&payload.transactions);
+    let heatmap_img_handle = images.add(heatmap_image);
+    let heatmap_material = materials_res.add(StandardMaterial {
+        base_color_texture: Some(heatmap_img_handle),
+        unlit: true,
+        ..default()
+    });
     state.z_cursor -= 4.0;
     state.blocks_rendered += 1;
+    registry.entries.push(BlockEntry {
+        number: payload.number,
+        z_position: state.z_cursor,
+        timestamp: payload.timestamp,
+        gas_fullness: fullness,
+    });
     commands.spawn((
         Mesh3d(meshes.add(Cuboid::new(width, 1.0, 2.0))),
-        MeshMaterial3d(material),
+        MeshMaterial3d(original_material.clone()),
         Transform::from_xyz(0.0, 0.0, state.z_cursor),
         Visibility::Visible,
         PickingBehavior::default(),
+        HeatmapMaterial {
+            original: original_material,
+            heatmap: heatmap_material,
+        },
         BlockSlab {
             number: payload.number,
             gas_used: payload.gas_used,
@@ -115,5 +201,6 @@ fn spawn_block_slab(
         state.z_cursor,
         meshes,
         materials_res,
+        images,
     );
 }

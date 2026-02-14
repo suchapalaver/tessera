@@ -1,5 +1,5 @@
 mod hud;
-mod inspector;
+pub(crate) mod inspector;
 mod timeline;
 
 pub use hud::{hud_plugin, HudState};

@@ -16,6 +16,7 @@ pub struct BlockPayload {
 #[derive(Clone, Debug)]
 pub struct TxPayload {
     pub hash: Option<String>,
+    pub tx_index: usize,
     pub gas: u64,
     pub gas_price: u64,
     pub value_eth: f64,

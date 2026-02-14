@@ -2,8 +2,8 @@
 
 use bevy::prelude::*;
 use block_explorer::{
-    config, fly_camera_plugin, hud_plugin, ingest_blocks, init_block_channel, inspector_plugin,
-    setup_scene,
+    arc_plugin, config, fly_camera_plugin, heatmap_plugin, hud_plugin, ingest_blocks,
+    init_block_channel, inspector_plugin, setup_scene, timeline_plugin,
 };
 
 fn main() {
@@ -25,6 +25,9 @@ fn main() {
         .add_plugins(fly_camera_plugin)
         .add_plugins(hud_plugin)
         .add_plugins(inspector_plugin)
+        .add_plugins(timeline_plugin)
+        .add_plugins(arc_plugin)
+        .add_plugins(heatmap_plugin)
         .add_systems(Startup, setup_scene)
         .add_systems(Update, ingest_blocks)
         .run();

@@ -76,6 +76,8 @@ fn hud_overlay_system(
     mut contexts: EguiContexts,
     hud: Res<HudState>,
     diagnostics: Res<DiagnosticsStore>,
+    heatmap_state: Res<crate::scene::HeatmapState>,
+    arc_settings: Res<crate::scene::arcs::ArcSettings>,
 ) {
     let fps = diagnostics
         .get(&FrameTimeDiagnosticsPlugin::FPS)
@@ -130,6 +132,29 @@ fn hud_overlay_system(
             ui.separator();
             ui.label(format!("Blocks rendered  {}", hud.blocks_rendered));
             ui.label(format!("FPS  {fps:.0}"));
+
+            ui.add_space(4.0);
+            ui.separator();
+            let heatmap_label = if heatmap_state.enabled {
+                "[H] Heatmap ON"
+            } else {
+                "[H] Heatmap OFF"
+            };
+            ui.label(
+                egui::RichText::new(heatmap_label)
+                    .size(11.0)
+                    .color(egui::Color32::from_rgb(120, 160, 140)),
+            );
+            let arc_label = if arc_settings.enabled {
+                "[V] Arcs ON"
+            } else {
+                "[V] Arcs OFF"
+            };
+            ui.label(
+                egui::RichText::new(arc_label)
+                    .size(11.0)
+                    .color(egui::Color32::from_rgb(120, 160, 140)),
+            );
         });
 }
 

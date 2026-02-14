@@ -8,7 +8,10 @@ pub mod data;
 pub mod scene;
 pub mod ui;
 
-pub use camera::fly_camera_plugin;
+pub use camera::{fly_camera_plugin, CameraTarget};
 pub use data::{init_block_channel, BlockChannel, BlockPayload, TxPayload};
-pub use scene::{ingest_blocks, setup_scene, BlockSlab, ExplorerState, TxCube};
+pub use scene::{
+    arc_plugin, heatmap_plugin, ingest_blocks, setup_scene, BlockEntry, BlockRegistry, BlockSlab,
+    ExplorerState, HeatmapState, TxCube,
+};
 pub use ui::{hud_plugin, inspector_plugin, timeline_plugin};
