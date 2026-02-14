@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use alloy::primitives::Address;
+use alloy::primitives::{address, Address};
 
 use crate::data::{BlockPayload, TxPayload};
 use bevy::prelude::*;
@@ -90,6 +90,7 @@ pub fn spawn_tx_cubes(
             spawn_blob_spheres(
                 &mut entity_commands,
                 tx.blob_count,
+                tx.from,
                 height,
                 meshes,
                 materials_res,
@@ -258,17 +259,36 @@ fn tx_height(tx: &TxPayload) -> f32 {
 const BLOB_SPHERE_RADIUS: f32 = 0.06;
 const BLOB_SPHERE_SPACING: f32 = 0.14;
 
+/// Base batch submitter on Ethereum mainnet.
+const BASE_BATCHER: Address = address!("5050F69a9786F081509234F1a7F4684b5E5b76C9");
+
 fn spawn_blob_spheres(
     parent: &mut bevy::prelude::EntityCommands,
     blob_count: usize,
+    from: Address,
     cube_height: f32,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials_res: &mut ResMut<Assets<StandardMaterial>>,
 ) {
     let sphere_mesh = meshes.add(Sphere::new(BLOB_SPHERE_RADIUS));
+
+    let (base_color, emissive) = if from == BASE_BATCHER {
+        // Base brand blue (#0052FF)
+        (
+            Color::srgba(0.0, 0.322, 1.0, 0.7),
+            LinearRgba::rgb(0.0, 0.2, 0.8),
+        )
+    } else {
+        // Default purple
+        (
+            Color::srgba(0.6, 0.3, 0.9, 0.7),
+            LinearRgba::rgb(0.4, 0.15, 0.7),
+        )
+    };
+
     let blob_material = materials_res.add(StandardMaterial {
-        base_color: Color::srgba(0.6, 0.3, 0.9, 0.7),
-        emissive: LinearRgba::rgb(0.4, 0.15, 0.7),
+        base_color,
+        emissive,
         alpha_mode: AlphaMode::Blend,
         ..default()
     });
