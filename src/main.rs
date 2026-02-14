@@ -8,8 +8,8 @@ use block_explorer::{
 
 fn main() {
     let _ = dotenvy::dotenv();
-    let rpc_url = config::rpc_url();
-    let channel = init_block_channel(&rpc_url);
+    let config = config::chain_config();
+    let channel = init_block_channel(config);
 
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {

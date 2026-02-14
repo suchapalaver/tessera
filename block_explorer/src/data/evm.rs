@@ -3,45 +3,43 @@
 use alloy::eips::BlockNumberOrTag;
 use alloy::providers::{Provider, ProviderBuilder};
 use alloy::rpc::types::BlockTransactions;
+use alloy_chains::Chain;
 use crossbeam_channel::{Receiver, Sender};
 use std::thread;
 use std::time::Duration;
+use url::Url;
 
 use crate::data::model::{BlockPayload, TxPayload};
+use crate::data::{ChainFetcher, FetcherConfig};
 
 const BACKFILL_COUNT: u64 = 20;
 const POLL_INTERVAL: Duration = Duration::from_secs(2);
 
-/// Spawns a thread that runs an internal tokio runtime and pushes
-/// block payloads onto the returned channel. Backfills last 20, then polls.
-pub fn spawn_evm_fetcher(rpc_url: String) -> Receiver<BlockPayload> {
-    let (tx, rx) = crossbeam_channel::bounded(64);
-    thread::spawn(move || {
-        let rt = match tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-        {
-            Ok(rt) => rt,
-            Err(err) => {
-                eprintln!("tessera: failed to build tokio runtime: {err}");
-                return;
-            }
-        };
-        rt.block_on(fetcher_loop(rpc_url, tx));
-    });
-    rx
+/// EVM-compatible block fetcher using Alloy.
+pub struct EvmFetcher;
+
+impl ChainFetcher for EvmFetcher {
+    fn spawn(config: FetcherConfig) -> Receiver<BlockPayload> {
+        let (tx, rx) = crossbeam_channel::bounded(64);
+        thread::spawn(move || {
+            let rt = match tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+            {
+                Ok(rt) => rt,
+                Err(err) => {
+                    eprintln!("tessera: failed to build tokio runtime: {err}");
+                    return;
+                }
+            };
+            rt.block_on(fetcher_loop(config.chain, config.rpc_url, tx));
+        });
+        rx
+    }
 }
 
-async fn fetcher_loop(rpc_url: String, tx: Sender<BlockPayload>) {
-    let url = match rpc_url.parse() {
-        Ok(u) => u,
-        Err(err) => {
-            eprintln!("tessera: invalid RPC URL {rpc_url:?}: {err}");
-            return;
-        }
-    };
-
-    let provider = ProviderBuilder::new().connect_http(url);
+async fn fetcher_loop(chain: Chain, rpc_url: Url, tx: Sender<BlockPayload>) {
+    let provider = ProviderBuilder::new().connect_http(rpc_url);
 
     let latest = match provider.get_block_number().await {
         Ok(n) => n,
@@ -55,7 +53,7 @@ async fn fetcher_loop(rpc_url: String, tx: Sender<BlockPayload>) {
     eprintln!("tessera: backfilling blocks {start}..={latest}");
 
     for n in start..=latest {
-        if fetch_and_send(&provider, n, &tx).await.is_err() {
+        if fetch_and_send(&provider, chain, n, &tx).await.is_err() {
             return;
         }
     }
@@ -75,7 +73,7 @@ async fn fetcher_loop(rpc_url: String, tx: Sender<BlockPayload>) {
         };
 
         for n in (last_seen + 1)..=tip {
-            if fetch_and_send(&provider, n, &tx).await.is_err() {
+            if fetch_and_send(&provider, chain, n, &tx).await.is_err() {
                 return;
             }
         }
@@ -87,6 +85,7 @@ async fn fetcher_loop(rpc_url: String, tx: Sender<BlockPayload>) {
 /// Returns `Err(())` if the channel is closed (receiver dropped).
 async fn fetch_and_send(
     provider: &impl Provider,
+    chain: Chain,
     number: u64,
     tx: &Sender<BlockPayload>,
 ) -> Result<(), ()> {
@@ -106,7 +105,7 @@ async fn fetch_and_send(
         }
     };
 
-    let payload = block_to_payload(&block);
+    let payload = block_to_payload(chain, &block);
     eprintln!(
         "tessera: block {} ({} txs, gas {}/{})",
         payload.number, payload.tx_count, payload.gas_used, payload.gas_limit
@@ -114,7 +113,7 @@ async fn fetch_and_send(
     tx.send(payload).map_err(|_| ())
 }
 
-fn block_to_payload(block: &alloy::rpc::types::Block) -> BlockPayload {
+fn block_to_payload(chain: Chain, block: &alloy::rpc::types::Block) -> BlockPayload {
     let header = &block.header;
 
     let transactions: Vec<TxPayload> = match &block.transactions {
@@ -127,6 +126,7 @@ fn block_to_payload(block: &alloy::rpc::types::Block) -> BlockPayload {
     };
 
     BlockPayload {
+        chain,
         number: header.number,
         gas_used: header.gas_used,
         gas_limit: header.gas_limit,

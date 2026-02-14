@@ -9,6 +9,8 @@ bevy = "0.15"
 alloy = { version = "1.0", features = ["provider-http", "rpc-types", "consensus", "network"] }
 tokio = { version = "1", features = ["rt-multi-thread", "time"] }
 crossbeam-channel = "0.5"
+alloy-chains = "0.2"
+url = "2"
 dotenvy = "0.15"
 bevy_egui = "0.33"
 

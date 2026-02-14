@@ -1,10 +1,12 @@
 // Block and transaction payloads using Alloy primitive types for type safety.
 
 use alloy::primitives::{Address, B256};
+use alloy_chains::Chain;
 
 /// A single block's summary and its transactions.
 #[derive(Clone, Debug)]
 pub struct BlockPayload {
+    pub chain: Chain,
     pub number: u64,
     pub gas_used: u64,
     pub gas_limit: u64,
