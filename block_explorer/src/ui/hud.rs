@@ -20,6 +20,8 @@ pub struct HudState {
     pub latest_timestamp: u64,
     pub blocks_rendered: u64,
     pub avg_gas_price_gwei: f64,
+    pub base_fee_per_gas: Option<u64>,
+    pub blob_gas_used: Option<u64>,
     gas_price_buffer: VecDeque<f64>,
 }
 
@@ -33,18 +35,32 @@ impl Default for HudState {
             latest_timestamp: 0,
             blocks_rendered: 0,
             avg_gas_price_gwei: 0.0,
+            base_fee_per_gas: None,
+            blob_gas_used: None,
             gas_price_buffer: VecDeque::new(),
         }
     }
 }
 
 impl HudState {
+    pub fn update_from_block_entry(&mut self, entry: &crate::scene::BlockEntry) {
+        self.latest_block_number = entry.number;
+        self.latest_gas_used = entry.gas_used;
+        self.latest_gas_limit = entry.gas_limit;
+        self.latest_tx_count = entry.tx_count;
+        self.latest_timestamp = entry.timestamp;
+        self.base_fee_per_gas = entry.base_fee_per_gas;
+        self.blob_gas_used = entry.blob_gas_used;
+    }
+
     pub fn update_from_payload(&mut self, payload: &BlockPayload) {
         self.latest_block_number = payload.number;
         self.latest_gas_used = payload.gas_used;
         self.latest_gas_limit = payload.gas_limit;
         self.latest_tx_count = payload.tx_count;
         self.latest_timestamp = payload.timestamp;
+        self.base_fee_per_gas = payload.base_fee_per_gas;
+        self.blob_gas_used = payload.blob_gas_used;
         self.blocks_rendered += 1;
 
         if !payload.transactions.is_empty() {
@@ -126,6 +142,14 @@ fn hud_overlay_system(
 
             ui.label(format!("Txns {}", hud.latest_tx_count));
             ui.label(format!("Avg gas price  {:.2} gwei", hud.avg_gas_price_gwei));
+            if let Some(base_fee) = hud.base_fee_per_gas {
+                ui.label(format!("Base fee  {:.2} gwei", base_fee as f64 / 1e9));
+            }
+            if let Some(blob_gas) = hud.blob_gas_used {
+                if blob_gas > 0 {
+                    ui.label(format!("Blob gas used  {}", format_gas(blob_gas)));
+                }
+            }
             ui.label(format!("Time {}", format_timestamp(hud.latest_timestamp)));
             ui.add_space(4.0);
 

@@ -28,6 +28,11 @@ pub struct BlockEntry {
     pub z_position: f32,
     pub timestamp: u64,
     pub gas_fullness: f32,
+    pub gas_used: u64,
+    pub gas_limit: u64,
+    pub tx_count: u32,
+    pub base_fee_per_gas: Option<u64>,
+    pub blob_gas_used: Option<u64>,
 }
 
 /// Registry of ingested blocks for timeline navigation.
@@ -167,13 +172,17 @@ fn spawn_block_slab(
         z_position: state.z_cursor,
         timestamp: payload.timestamp,
         gas_fullness: fullness,
+        gas_used: payload.gas_used,
+        gas_limit: payload.gas_limit,
+        tx_count: payload.tx_count,
+        base_fee_per_gas: payload.base_fee_per_gas,
+        blob_gas_used: payload.blob_gas_used,
     });
     commands.spawn((
         Mesh3d(meshes.add(Cuboid::new(width, 1.0, 2.0))),
         MeshMaterial3d(original_material.clone()),
         Transform::from_xyz(0.0, 0.0, state.z_cursor),
         Visibility::Visible,
-        PickingBehavior::default(),
         HeatmapMaterial {
             original: original_material,
             heatmap: heatmap_material,

@@ -9,6 +9,8 @@ pub struct BlockPayload {
     pub gas_limit: u64,
     pub timestamp: u64,
     pub tx_count: u32,
+    pub base_fee_per_gas: Option<u64>,
+    pub blob_gas_used: Option<u64>,
     pub transactions: Vec<TxPayload>,
 }
 
@@ -22,6 +24,8 @@ pub struct TxPayload {
     pub value_eth: f64,
     pub from: Option<String>,
     pub to: Option<String>,
+    pub blob_count: usize,
+    pub max_fee_per_blob_gas: Option<u64>,
 }
 
 // Both are used across thread boundaries (fetcher → channel → ECS).

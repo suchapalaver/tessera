@@ -18,6 +18,8 @@ pub struct TxCube {
     pub to: Option<String>,
     pub block_number: u64,
     pub world_position: Vec3,
+    pub blob_count: usize,
+    pub max_fee_per_blob_gas: Option<u64>,
 }
 
 const GRID_SPACING: f32 = 0.25;
@@ -78,7 +80,8 @@ pub fn spawn_tx_cubes(
         let y = SLAB_HEIGHT / 2.0 + height / 2.0;
         let material = materials::tx_cube_material(materials_res, tx, payload.transactions.len());
 
-        commands.spawn((
+        let world_pos = Vec3::new(pos.0, y, z + pos.1);
+        let mut entity_commands = commands.spawn((
             Mesh3d(meshes.add(Cuboid::new(CUBE_BASE, height, CUBE_BASE))),
             MeshMaterial3d(material),
             Transform::from_xyz(pos.0, y, z + pos.1),
@@ -92,9 +95,22 @@ pub fn spawn_tx_cubes(
                 from: tx.from.clone(),
                 to: tx.to.clone(),
                 block_number: payload.number,
-                world_position: Vec3::new(pos.0, y, z + pos.1),
+                world_position: world_pos,
+                blob_count: tx.blob_count,
+                max_fee_per_blob_gas: tx.max_fee_per_blob_gas,
             },
         ));
+
+        // Spawn blob spheres as children of blob-carrying transactions
+        if tx.blob_count > 0 {
+            spawn_blob_spheres(
+                &mut entity_commands,
+                tx.blob_count,
+                height,
+                meshes,
+                materials_res,
+            );
+        }
     }
 
     // Spawn cluster labels for top groups
@@ -258,4 +274,38 @@ fn grid_positions(count: usize, slab_width: f32, slab_depth: f32) -> Vec<(f32, f
 fn tx_height(tx: &TxPayload) -> f32 {
     let t = (tx.gas as f32 / 500_000.0).clamp(0.0, 1.0);
     MIN_HEIGHT + (MAX_HEIGHT - MIN_HEIGHT) * t
+}
+
+const BLOB_SPHERE_RADIUS: f32 = 0.06;
+const BLOB_SPHERE_SPACING: f32 = 0.14;
+
+fn spawn_blob_spheres(
+    parent: &mut bevy::prelude::EntityCommands,
+    blob_count: usize,
+    cube_height: f32,
+    meshes: &mut ResMut<Assets<Mesh>>,
+    materials_res: &mut ResMut<Assets<StandardMaterial>>,
+) {
+    let sphere_mesh = meshes.add(Sphere::new(BLOB_SPHERE_RADIUS));
+    let blob_material = materials_res.add(StandardMaterial {
+        base_color: Color::srgba(0.6, 0.3, 0.9, 0.7),
+        emissive: LinearRgba::rgb(0.4, 0.15, 0.7),
+        alpha_mode: AlphaMode::Blend,
+        ..default()
+    });
+
+    let total_width = (blob_count as f32 - 1.0) * BLOB_SPHERE_SPACING;
+    let start_x = -total_width / 2.0;
+    let y_offset = cube_height / 2.0 + BLOB_SPHERE_RADIUS + 0.02;
+
+    parent.with_children(|builder| {
+        for i in 0..blob_count {
+            let x = start_x + i as f32 * BLOB_SPHERE_SPACING;
+            builder.spawn((
+                Mesh3d(sphere_mesh.clone()),
+                MeshMaterial3d(blob_material.clone()),
+                Transform::from_xyz(x, y_offset, 0.0),
+            ));
+        }
+    });
 }

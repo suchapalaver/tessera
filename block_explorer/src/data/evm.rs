@@ -132,6 +132,8 @@ fn block_to_payload(block: &alloy::rpc::types::Block) -> BlockPayload {
         gas_limit: header.gas_limit,
         timestamp: header.timestamp,
         tx_count: transactions.len() as u32,
+        base_fee_per_gas: header.base_fee_per_gas,
+        blob_gas_used: header.blob_gas_used,
         transactions,
     }
 }
@@ -139,6 +141,8 @@ fn block_to_payload(block: &alloy::rpc::types::Block) -> BlockPayload {
 fn tx_to_payload(index: usize, tx: &alloy::rpc::types::Transaction) -> TxPayload {
     use alloy::consensus::Transaction as TxConsensus;
     use alloy::network::TransactionResponse;
+
+    let blob_count = TxConsensus::blob_versioned_hashes(tx).map_or(0, |h| h.len());
 
     TxPayload {
         hash: Some(format!("{}", tx.tx_hash())),
@@ -148,6 +152,8 @@ fn tx_to_payload(index: usize, tx: &alloy::rpc::types::Transaction) -> TxPayload
         value_eth: wei_to_eth(tx.value()),
         from: Some(format!("{}", TransactionResponse::from(tx))),
         to: tx.to().map(|addr| format!("{addr}")),
+        blob_count,
+        max_fee_per_blob_gas: TxConsensus::max_fee_per_blob_gas(tx).map(|f| f as u64),
     }
 }
 

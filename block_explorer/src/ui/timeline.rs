@@ -5,6 +5,7 @@ use bevy_egui::{egui, EguiContexts};
 
 use crate::camera::CameraTarget;
 use crate::scene::BlockRegistry;
+use crate::ui::HudState;
 
 /// Playback state for the timeline scrubber.
 #[derive(Resource)]
@@ -36,6 +37,7 @@ fn timeline_ui_system(
     registry: Res<BlockRegistry>,
     mut state: ResMut<TimelineState>,
     mut camera_target: ResMut<CameraTarget>,
+    mut hud_state: ResMut<HudState>,
 ) {
     if registry.entries.is_empty() {
         return;
@@ -110,6 +112,7 @@ fn timeline_ui_system(
                                     state.current_index = i;
                                     state.playing = false;
                                     jump_to_block(entry.z_position, &mut camera_target);
+                                    hud_state.update_from_block_entry(entry);
                                 }
 
                                 response.on_hover_text(format!(
@@ -129,6 +132,7 @@ fn playback_system(
     registry: Res<BlockRegistry>,
     mut state: ResMut<TimelineState>,
     mut camera_target: ResMut<CameraTarget>,
+    mut hud_state: ResMut<HudState>,
 ) {
     if !state.playing || registry.entries.is_empty() {
         return;
@@ -140,8 +144,9 @@ fn playback_system(
         if state.current_index + 1 < registry.entries.len() {
             state.playback_timer = 0.0;
             state.current_index += 1;
-            let z = registry.entries[state.current_index].z_position;
-            jump_to_block(z, &mut camera_target);
+            let entry = &registry.entries[state.current_index];
+            jump_to_block(entry.z_position, &mut camera_target);
+            hud_state.update_from_block_entry(entry);
         } else {
             // At the end — keep playing but wait for new blocks to arrive
             state.playback_timer = 1.0;
