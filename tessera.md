@@ -198,28 +198,43 @@ From the repo root: `cargo run` runs the **tessera** binary; `cargo run -p block
 - [ ] Refactor `evm.rs` to implement this trait
 - [ ] `BlockPayload` gains `chain: ChainId` field (enum: Ethereum, Base, Arbitrum, Solana...)
 
-### 4.2 Solana fetcher (`src/data/solana.rs`)
+### 4.2 OP Stack L2 gas fee decomposition
+
+When fetching from OP Stack chains (Base, Optimism, etc.), use `op-alloy-network` with `Provider<Optimism>` instead of `Provider<Ethereum>` to access L2-specific receipt fields. This exposes three distinct gas cost components:
+
+- **L2 execution cost** — gas used on L2 × L2 gas price
+- **L1 data fee** — fee for posting tx data to L1
+- **Blob gas cost** — EIP-4844 blob storage cost
+
+Reference: `../../semiotic-ai/likwid/` L2 adapter pattern — branches on `chain.has_l1_fees()` to select the provider network type, then extracts fee components from OP Stack receipts.
+
+- [ ] Add `op-alloy-network` dependency
+- [ ] Branch `EvmFetcher` provider construction based on chain type
+- [ ] Extend `TxPayload` with optional L1 data fee and blob gas fields
+- [ ] Surface L2 fee breakdown in inspector UI
+
+### 4.3 Solana fetcher (`src/data/solana.rs`)
 
 - [ ] Use `solana-client` + `solana-transaction-status` crates
 - [ ] Map slot → `BlockPayload`, instructions → `TxPayload`
 - [ ] Handle Solana's faster cadence (400ms slots): aggregate into visual "super-slots"
   or use a time-normalized Z-axis instead of per-block spacing
 
-### 4.3 Multi-chain scene layout
+### 4.4 Multi-chain scene layout
 
 - [ ] Option A: parallel lanes (Ethereum = left lane, Solana = right lane, shared time axis)
 - [ ] Option B: layered planes (each chain is a horizontal sheet at different Y heights)
 - [ ] Color-code slabs by chain, unify the time axis to wall-clock
 - [ ] Cross-chain bridge txs: detect (heuristic or tagged) and draw arcs between lanes
 
-### 4.4 Instanced rendering
+### 4.5 Instanced rendering
 
 - [ ] Replace individual `TxCube` mesh spawns with `InstancedMesh` batches
 - [ ] One mesh + one material per gas-price bucket, thousands of instances
 - [ ] Target: 100+ blocks on screen at 60fps
 - [ ] Bevy's `Mesh` with custom vertex data, or use `bevy_hanabi` for particle-like tx clouds
 
-### 4.5 Data persistence
+### 4.6 Data persistence
 
 - [ ] Optional: write `BlockPayload` history to `redb` (embedded, zero-config)
 - [ ] Enables: launch app, immediately see last 1000 blocks without re-fetching
@@ -274,9 +289,10 @@ From the repo root: `cargo run` runs the **tessera** binary; `cargo run -p block
          3.4 independent (shader work)
          3.5 requires 1.6 (tx cubes exist)
          
-         4.1 ──▶ 4.2 ──▶ 4.3
-         4.4 independent (perf work, do when needed)
-         4.5 independent
+         4.1 ──▶ 4.2 (OP Stack gas fees)
+         4.1 ──▶ 4.3 ──▶ 4.4
+         4.5 independent (perf work, do when needed)
+         4.6 independent
 ```
 
 ---

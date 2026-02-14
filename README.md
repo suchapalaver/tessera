@@ -58,18 +58,22 @@ If no `RPC_URL` is set, it defaults to `http://127.0.0.1:8545` (local Anvil).
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `RPC_URL` | EVM JSON-RPC endpoint | `http://127.0.0.1:8545` |
+| `RPC_URL` | EVM JSON-RPC endpoint (defaults to mainnet) | `http://127.0.0.1:8545` |
+| `MAINNET_RPC_URL` | Ethereum mainnet endpoint | — |
+| `BASE_RPC_URL` | Base L2 endpoint | — |
+| `OPTIMISM_RPC_URL` | Optimism endpoint | — |
+| `ARBITRUM_RPC_URL` | Arbitrum endpoint | — |
 
-Set via environment variable or in `block_explorer/.env`.
+Set via environment variable or in `block_explorer/.env`. Chain-specific vars override `RPC_URL` and auto-select the chain.
 
 **Provider examples:**
 
 ```bash
-# Alchemy
+# Alchemy (mainnet)
 RPC_URL=https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY
 
-# Infura
-RPC_URL=https://mainnet.infura.io/v3/YOUR_KEY
+# Base (auto-detected)
+BASE_RPC_URL=https://base-mainnet.g.alchemy.com/v2/YOUR_KEY
 
 # Local Anvil
 RPC_URL=http://127.0.0.1:8545
