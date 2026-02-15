@@ -1,8 +1,8 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-- `src/main.rs` is the binary entry point that wires Bevy plugins from the `block_explorer` crate.
-- `block_explorer/src/` is the core library, grouped by feature areas: `camera/`, `data/`, `scene/`, and `ui/`, with shared modules like `config.rs` and `lib.rs`.
+- `src/main.rs` is the binary entry point that boots the app via `BlockExplorerBuilder`.
+- `block_explorer/src/` is the core library, grouped by `camera/`, `data/`, `render/`, `scene/`, `sdk/`, and `ui/`, with shared modules like `config.rs` and `lib.rs`.
 - Build artifacts live under `target/` and `block_explorer/target/` (do not edit).
 - Runtime config lives in `block_explorer/.env` (see `RPC_URL` below).
 
@@ -17,11 +17,11 @@
 ## Coding Style & Naming Conventions
 - Use standard Rust formatting (`rustfmt` defaults). Indentation is 4 spaces.
 - Naming follows Rust conventions: `snake_case` for functions/variables/modules, `CamelCase` for types/traits, `SCREAMING_SNAKE_CASE` for constants.
-- Keep Bevy systems small and composable; register new systems alongside related plugins in `src/main.rs` or `block_explorer/src/lib.rs`.
+- Keep Bevy systems small and composable; prefer wiring through `BlockExplorerBuilder` and renderer hooks instead of direct scene edits.
 
 ## Testing Guidelines (Agent Feedback Loop Priority)
 - Goal: tests must provide a fast feedback loop for agents. Target under ~30s on a typical dev machine.
-- Current state: no in-repo tests exist yet.
+- Current state: unit/smoke tests live in `block_explorer/src/**`, integration tests in `block_explorer/tests/`.
 - Unit tests: add `#[cfg(test)] mod tests` in the owning module. Start with config parsing and deterministic helpers in `block_explorer/src/config.rs` and `block_explorer/src/data/`.
 - Smoke test: add a minimal startup test that constructs the Bevy app without panicking, ideally in headless/minimal mode.
 - Integration tests: place under `block_explorer/tests/` to exercise RPC ingestion and cross-system behavior. Use `testcontainers-modules` with Anvil for repeatable chain state.
