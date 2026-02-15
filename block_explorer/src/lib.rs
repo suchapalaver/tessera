@@ -5,6 +5,7 @@
 mod camera;
 pub mod config;
 pub mod data;
+pub mod render;
 mod scene;
 mod ui;
 

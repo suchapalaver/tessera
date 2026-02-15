@@ -5,12 +5,14 @@ use bevy::prelude::*;
 use crate::camera::fly_camera_plugin;
 use crate::config;
 use crate::data::{init_block_channel, FetcherConfig};
+use crate::render::{BlockRenderer, RendererResource, SlabsAndCubesRenderer};
 use crate::scene::{arc_plugin, heatmap_plugin, ingest_blocks, setup_scene};
 use crate::ui::{hud_plugin, inspector_plugin, timeline_plugin};
 
 /// Builder for constructing a Tessera app with customizable plugins.
 pub struct BlockExplorerBuilder {
     config: Option<FetcherConfig>,
+    renderer: Option<Box<dyn BlockRenderer>>,
     window_title: String,
     window_resolution: (f32, f32),
     clear_color: Color,
@@ -26,6 +28,7 @@ impl Default for BlockExplorerBuilder {
     fn default() -> Self {
         Self {
             config: None,
+            renderer: None,
             window_title: "Tessera".to_string(),
             window_resolution: (1280.0, 720.0),
             clear_color: Color::srgb(0.05, 0.05, 0.08),
@@ -58,6 +61,12 @@ impl BlockExplorerBuilder {
 
     pub fn window_title(mut self, title: impl Into<String>) -> Self {
         self.window_title = title.into();
+        self
+    }
+
+    /// Provide a custom block renderer implementation.
+    pub fn renderer(mut self, renderer: impl BlockRenderer) -> Self {
+        self.renderer = Some(Box::new(renderer));
         self
     }
 
@@ -105,6 +114,9 @@ impl BlockExplorerBuilder {
     pub fn build(self) -> App {
         let config = self.config.unwrap_or_else(config::chain_config);
         let channel = init_block_channel(config);
+        let renderer = self
+            .renderer
+            .unwrap_or_else(|| Box::new(SlabsAndCubesRenderer::default()));
 
         let mut app = App::new();
         app.add_plugins(DefaultPlugins.set(WindowPlugin {
@@ -119,6 +131,9 @@ impl BlockExplorerBuilder {
         .insert_resource(channel)
         .add_systems(Startup, setup_scene)
         .add_systems(Update, ingest_blocks);
+
+        renderer.setup(&mut app);
+        app.insert_resource(RendererResource(renderer));
 
         if self.enable_fly_camera {
             app.add_plugins(fly_camera_plugin);

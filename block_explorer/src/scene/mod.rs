@@ -1,5 +1,5 @@
 pub(crate) mod arcs;
-mod blocks;
+pub(crate) mod blocks;
 pub(crate) mod contracts;
 pub(crate) mod labels;
 pub(crate) mod materials;

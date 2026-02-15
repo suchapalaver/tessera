@@ -1,7 +1,7 @@
 //! Block slabs: ingest_blocks system, ExplorerState, BlockSlab component.
 
-use crate::data::{BlockChannel, BlockPayload};
-use crate::scene::materials;
+use crate::data::BlockChannel;
+use crate::render::RendererResource;
 use crate::ui::HudState;
 use bevy::prelude::*;
 
@@ -114,6 +114,7 @@ pub fn setup_scene(mut commands: Commands) {
 pub fn ingest_blocks(
     mut commands: Commands,
     channel: Res<BlockChannel>,
+    renderer: Res<RendererResource>,
     mut state: ResMut<ExplorerState>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials_res: ResMut<Assets<StandardMaterial>>,
@@ -126,92 +127,20 @@ pub fn ingest_blocks(
         match channel.0.try_recv() {
             Ok(payload) => {
                 hud_state.update_from_payload(&payload);
-                spawn_block_slab(
+                renderer.0.spawn_block(
                     &mut commands,
-                    &payload,
-                    &mut state,
                     &mut meshes,
                     &mut materials_res,
                     &mut images,
+                    &mut state,
                     &mut registry,
+                    &payload,
                 );
                 received += 1;
             }
             Err(_) => break,
         }
     }
-}
-
-fn spawn_block_slab(
-    commands: &mut Commands,
-    payload: &BlockPayload,
-    state: &mut ResMut<ExplorerState>,
-    meshes: &mut ResMut<Assets<Mesh>>,
-    materials_res: &mut ResMut<Assets<StandardMaterial>>,
-    images: &mut ResMut<Assets<Image>>,
-    registry: &mut ResMut<BlockRegistry>,
-) {
-    let fullness = if payload.gas_limit > 0 {
-        payload.gas_used as f32 / payload.gas_limit as f32
-    } else {
-        0.0
-    };
-    let width = 2.0 + 10.0 * fullness;
-    let original_material = materials::block_slab_material_with_fullness(materials_res, fullness);
-    let heatmap_image = materials::generate_heatmap_image(&payload.transactions);
-    let heatmap_img_handle = images.add(heatmap_image);
-    let heatmap_material = materials_res.add(StandardMaterial {
-        base_color_texture: Some(heatmap_img_handle),
-        unlit: true,
-        ..default()
-    });
-    state.z_cursor -= 4.0;
-    state.blocks_rendered += 1;
-    registry.entries.push(BlockEntry {
-        number: payload.number,
-        z_position: state.z_cursor,
-        timestamp: payload.timestamp,
-        gas_fullness: fullness,
-        gas_used: payload.gas_used,
-        gas_limit: payload.gas_limit,
-        tx_count: payload.tx_count,
-        base_fee_per_gas: payload.base_fee_per_gas,
-        blob_gas_used: payload.blob_gas_used,
-    });
-    commands.spawn((
-        Mesh3d(meshes.add(Cuboid::new(width, 1.0, 2.0))),
-        MeshMaterial3d(original_material.clone()),
-        Transform::from_xyz(0.0, 0.0, state.z_cursor),
-        Visibility::Visible,
-        HeatmapMaterial {
-            original: original_material,
-            heatmap: heatmap_material,
-        },
-        BlockSlab {
-            number: payload.number,
-            gas_used: payload.gas_used,
-            gas_limit: payload.gas_limit,
-            timestamp: payload.timestamp,
-            tx_count: payload.tx_count,
-        },
-    ));
-    crate::scene::labels::spawn_block_labels(
-        commands,
-        images,
-        materials_res,
-        meshes,
-        payload.number,
-        state.z_cursor,
-        width,
-    );
-    crate::scene::transactions::spawn_tx_cubes(
-        commands,
-        payload,
-        state.z_cursor,
-        meshes,
-        materials_res,
-        images,
-    );
 }
 
 #[cfg(test)]
