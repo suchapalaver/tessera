@@ -41,6 +41,17 @@ A 3D block space explorer that visualizes Ethereum blocks as slabs and transacti
 
 If no `RPC_URL` is set, it defaults to `http://127.0.0.1:8545` (local Anvil).
 
+### Library Usage
+
+Use the SDK builder when embedding Tessera in another Bevy app:
+
+```rust
+use block_explorer::prelude::*;
+
+let _ = dotenvy::dotenv();
+BlockExplorerBuilder::new().chain_config().build().run();
+```
+
 ## Controls
 
 | Key | Action |

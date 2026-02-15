@@ -7,7 +7,6 @@ mod transactions;
 
 pub use arcs::arc_plugin;
 pub use blocks::{
-    heatmap_plugin, ingest_blocks, setup_scene, BlockEntry, BlockRegistry, BlockSlab,
-    ExplorerState, HeatmapState,
+    heatmap_plugin, ingest_blocks, setup_scene, BlockEntry, BlockRegistry, BlockSlab, HeatmapState,
 };
-pub use transactions::{spawn_tx_cubes, TxCube};
+pub use transactions::TxCube;
