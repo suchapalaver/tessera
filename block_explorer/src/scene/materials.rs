@@ -124,6 +124,7 @@ mod tests {
             to: None,
             blob_count: 0,
             max_fee_per_blob_gas: None,
+            op_stack_fees: None,
         }
     }
 

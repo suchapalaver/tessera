@@ -14,6 +14,33 @@ const CHAIN_ENV_VARS: &[(NamedChain, &str)] = &[
 
 const DEFAULT_RPC: &str = "http://127.0.0.1:8545";
 
+/// Returns all configured chains by checking which env vars are set.
+/// Falls back to a single mainnet config if nothing is set.
+pub fn chain_configs() -> Vec<FetcherConfig> {
+    let mut configs: Vec<FetcherConfig> = CHAIN_ENV_VARS
+        .iter()
+        .filter_map(|(named, env_var)| {
+            let raw = std::env::var(env_var).ok()?;
+            match raw.parse::<Url>() {
+                Ok(url) => Some(FetcherConfig {
+                    chain: Chain::from_named(*named),
+                    rpc_url: url,
+                }),
+                Err(_) => {
+                    eprintln!("tessera: invalid URL in {env_var}: {raw:?}");
+                    None
+                }
+            }
+        })
+        .collect();
+
+    if configs.is_empty() {
+        configs.push(chain_config());
+    }
+
+    configs
+}
+
 /// Returns the chain and RPC URL based on which env var is set.
 /// Checks chain-specific vars first, falls back to RPC_URL → mainnet.
 pub fn chain_config() -> FetcherConfig {
@@ -121,5 +148,39 @@ mod tests {
 
         assert_eq!(config.chain, Chain::mainnet());
         assert_eq!(config.rpc_url.as_str(), "http://127.0.0.1:8545/");
+    }
+
+    #[test]
+    fn chain_configs_returns_all_configured_chains() {
+        let _lock = lock_env();
+        let _guard = EnvGuard::capture(&ENV_KEYS);
+
+        for key in &ENV_KEYS {
+            std::env::remove_var(key);
+        }
+
+        std::env::set_var("MAINNET_RPC_URL", "http://127.0.0.1:8545");
+        std::env::set_var("BASE_RPC_URL", "http://127.0.0.1:8546");
+
+        let configs = chain_configs();
+
+        assert_eq!(configs.len(), 2);
+        assert_eq!(configs[0].chain, Chain::mainnet());
+        assert_eq!(configs[1].chain, Chain::from_named(NamedChain::Base));
+    }
+
+    #[test]
+    fn chain_configs_falls_back_to_single_mainnet() {
+        let _lock = lock_env();
+        let _guard = EnvGuard::capture(&ENV_KEYS);
+
+        for key in &ENV_KEYS {
+            std::env::remove_var(key);
+        }
+
+        let configs = chain_configs();
+
+        assert_eq!(configs.len(), 1);
+        assert_eq!(configs[0].chain, Chain::mainnet());
     }
 }

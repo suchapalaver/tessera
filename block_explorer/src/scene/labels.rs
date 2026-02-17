@@ -452,6 +452,7 @@ fn fit_quad(face_w: f32, img_aspect: f32) -> (f32, f32) {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn spawn_block_labels(
     commands: &mut Commands,
     images: &mut ResMut<Assets<Image>>,
@@ -460,6 +461,7 @@ pub fn spawn_block_labels(
     block_number: u64,
     slab_z: f32,
     slab_width: f32,
+    x_offset: f32,
 ) {
     let text = format!("#{block_number}");
     let char_count = text.len() as u32;
@@ -484,7 +486,7 @@ pub fn spawn_block_labels(
     let (sd_w, sd_h) = fit_quad(2.0, img_aspect);
     let sd_mesh = meshes.add(Rectangle::new(sd_w, sd_h));
 
-    let pos = Vec3::new(0.0, 0.0, slab_z);
+    let pos = Vec3::new(x_offset, 0.0, slab_z);
 
     // Front (+Z)
     commands.spawn((

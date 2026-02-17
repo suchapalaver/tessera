@@ -4,6 +4,5 @@ use block_explorer::prelude::*;
 
 fn main() {
     let _ = dotenvy::dotenv();
-    let config = chain_config();
-    BlockExplorerBuilder::new().config(config).build().run();
+    BlockExplorerBuilder::new().chain_configs().build().run();
 }

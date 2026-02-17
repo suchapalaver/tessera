@@ -6,6 +6,8 @@ use bevy::diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin};
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts, EguiPlugin};
 
+use alloy_chains::Chain;
+
 use crate::data::BlockPayload;
 
 const GAS_PRICE_WINDOW: usize = 10;
@@ -13,6 +15,7 @@ const GAS_PRICE_WINDOW: usize = 10;
 /// Live HUD state updated each time a block is ingested.
 #[derive(Resource)]
 pub struct HudState {
+    pub chain: Option<Chain>,
     pub latest_block_number: u64,
     pub latest_gas_used: u64,
     pub latest_gas_limit: u64,
@@ -28,6 +31,7 @@ pub struct HudState {
 impl Default for HudState {
     fn default() -> Self {
         Self {
+            chain: None,
             latest_block_number: 0,
             latest_gas_used: 0,
             latest_gas_limit: 0,
@@ -44,6 +48,7 @@ impl Default for HudState {
 
 impl HudState {
     pub fn update_from_block_entry(&mut self, entry: &crate::scene::BlockEntry) {
+        self.chain = Some(entry.chain);
         self.latest_block_number = entry.number;
         self.latest_gas_used = entry.gas_used;
         self.latest_gas_limit = entry.gas_limit;
@@ -54,6 +59,7 @@ impl HudState {
     }
 
     pub fn update_from_payload(&mut self, payload: &BlockPayload) {
+        self.chain = Some(payload.chain);
         self.latest_block_number = payload.number;
         self.latest_gas_used = payload.gas_used;
         self.latest_gas_limit = payload.gas_limit;
@@ -121,8 +127,18 @@ fn hud_overlay_system(
             ui.style_mut().override_text_style = Some(egui::TextStyle::Monospace);
             ui.visuals_mut().override_text_color = Some(egui::Color32::from_rgb(200, 220, 240));
 
+            let chain_label = hud
+                .chain
+                .and_then(|c| c.named())
+                .map(|n| n.to_string())
+                .unwrap_or_default();
+            let header = if chain_label.is_empty() {
+                format!("Block #{}", hud.latest_block_number)
+            } else {
+                format!("{chain_label} #{}", hud.latest_block_number)
+            };
             ui.label(
-                egui::RichText::new(format!("Block #{}", hud.latest_block_number))
+                egui::RichText::new(header)
                     .size(16.0)
                     .color(egui::Color32::from_rgb(100, 220, 180)),
             );
@@ -176,6 +192,11 @@ fn hud_overlay_system(
             };
             ui.label(
                 egui::RichText::new(arc_label)
+                    .size(11.0)
+                    .color(egui::Color32::from_rgb(120, 160, 140)),
+            );
+            ui.label(
+                egui::RichText::new("[B] Blob links")
                     .size(11.0)
                     .color(egui::Color32::from_rgb(120, 160, 140)),
             );

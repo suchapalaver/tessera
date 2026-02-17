@@ -24,6 +24,7 @@ pub trait BlockRenderer: Send + Sync + 'static {
         state: &mut ResMut<ExplorerState>,
         registry: &mut ResMut<BlockRegistry>,
         payload: &BlockPayload,
+        x_offset: f32,
     );
 }
 

@@ -4,14 +4,14 @@ use bevy::prelude::*;
 
 use crate::camera::fly_camera_plugin;
 use crate::config;
-use crate::data::{init_block_channel, FetcherConfig};
+use crate::data::{init_multi_chain_channel, FetcherConfig};
 use crate::render::{BlockRenderer, RendererResource, SlabsAndCubesRenderer};
-use crate::scene::{arc_plugin, heatmap_plugin, ingest_blocks, setup_scene};
+use crate::scene::{arc_plugin, blob_link_plugin, heatmap_plugin, ingest_blocks, setup_scene};
 use crate::ui::{hud_plugin, inspector_plugin, timeline_plugin};
 
 /// Builder for constructing a Tessera app with customizable plugins.
 pub struct BlockExplorerBuilder {
-    config: Option<FetcherConfig>,
+    configs: Vec<FetcherConfig>,
     renderer: Option<Box<dyn BlockRenderer>>,
     window_title: String,
     window_resolution: (f32, f32),
@@ -22,12 +22,13 @@ pub struct BlockExplorerBuilder {
     enable_timeline: bool,
     enable_arcs: bool,
     enable_heatmap: bool,
+    enable_blob_links: bool,
 }
 
 impl Default for BlockExplorerBuilder {
     fn default() -> Self {
         Self {
-            config: None,
+            configs: Vec::new(),
             renderer: None,
             window_title: "Tessera".to_string(),
             window_resolution: (1280.0, 720.0),
@@ -38,6 +39,7 @@ impl Default for BlockExplorerBuilder {
             enable_timeline: true,
             enable_arcs: true,
             enable_heatmap: true,
+            enable_blob_links: true,
         }
     }
 }
@@ -47,15 +49,27 @@ impl BlockExplorerBuilder {
         Self::default()
     }
 
-    /// Use an explicit fetcher configuration.
+    /// Use an explicit fetcher configuration (clears previous configs).
     pub fn config(mut self, config: FetcherConfig) -> Self {
-        self.config = Some(config);
+        self.configs = vec![config];
         self
     }
 
-    /// Use the default chain configuration from environment variables.
+    /// Add a single chain configuration.
+    pub fn add_chain(mut self, config: FetcherConfig) -> Self {
+        self.configs.push(config);
+        self
+    }
+
+    /// Load all configured chains from environment variables.
+    pub fn chain_configs(mut self) -> Self {
+        self.configs = config::chain_configs();
+        self
+    }
+
+    /// Use the default single-chain configuration from environment variables.
     pub fn chain_config(mut self) -> Self {
-        self.config = Some(config::chain_config());
+        self.configs = vec![config::chain_config()];
         self
     }
 
@@ -110,10 +124,19 @@ impl BlockExplorerBuilder {
         self
     }
 
+    pub fn disable_blob_links(mut self) -> Self {
+        self.enable_blob_links = false;
+        self
+    }
+
     /// Build the Bevy app with the selected configuration and plugins.
     pub fn build(self) -> App {
-        let config = self.config.unwrap_or_else(config::chain_config);
-        let channel = init_block_channel(config);
+        let configs = if self.configs.is_empty() {
+            config::chain_configs()
+        } else {
+            self.configs
+        };
+        let channel = init_multi_chain_channel(configs);
         let renderer = self
             .renderer
             .unwrap_or_else(|| Box::new(SlabsAndCubesRenderer::default()));
@@ -152,6 +175,9 @@ impl BlockExplorerBuilder {
         }
         if self.enable_heatmap {
             app.add_plugins(heatmap_plugin);
+        }
+        if self.enable_blob_links {
+            app.add_plugins(blob_link_plugin);
         }
 
         app

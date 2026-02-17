@@ -111,7 +111,11 @@ fn timeline_ui_system(
                                 if response.clicked() {
                                     state.current_index = i;
                                     state.playing = false;
-                                    jump_to_block(entry.z_position, &mut camera_target);
+                                    jump_to_block(
+                                        entry.z_position,
+                                        entry.x_offset,
+                                        &mut camera_target,
+                                    );
                                     hud_state.update_from_block_entry(entry);
                                 }
 
@@ -145,7 +149,7 @@ fn playback_system(
             state.playback_timer = 0.0;
             state.current_index += 1;
             let entry = &registry.entries[state.current_index];
-            jump_to_block(entry.z_position, &mut camera_target);
+            jump_to_block(entry.z_position, entry.x_offset, &mut camera_target);
             hud_state.update_from_block_entry(entry);
         } else {
             // At the end — keep playing but wait for new blocks to arrive
@@ -154,9 +158,9 @@ fn playback_system(
     }
 }
 
-fn jump_to_block(z_position: f32, camera_target: &mut CameraTarget) {
-    camera_target.target = Some(Vec3::new(0.0, 5.0, z_position + 10.0));
-    camera_target.look_at = Some(Vec3::new(0.0, 0.0, z_position));
+fn jump_to_block(z_position: f32, x_offset: f32, camera_target: &mut CameraTarget) {
+    camera_target.target = Some(Vec3::new(x_offset, 5.0, z_position + 10.0));
+    camera_target.look_at = Some(Vec3::new(x_offset, 0.0, z_position));
 }
 
 fn fullness_color(fullness: f32) -> egui::Color32 {

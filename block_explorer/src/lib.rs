@@ -13,4 +13,4 @@ pub mod prelude;
 pub mod sdk;
 
 pub use data::evm::EvmFetcher;
-pub use data::{BlockPayload, ChainFetcher, FetcherConfig, TxPayload};
+pub use data::{is_op_stack, BlockPayload, ChainFetcher, FetcherConfig, OpStackFees, TxPayload};

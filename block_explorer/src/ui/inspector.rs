@@ -193,11 +193,26 @@ fn show_block_panel(contexts: &mut EguiContexts, slab: &BlockSlab) {
         0.0
     };
 
+    let chain_label = slab
+        .chain
+        .named()
+        .map(|n| n.to_string())
+        .unwrap_or_default();
+
     egui::SidePanel::right("inspector")
         .default_width(260.0)
         .frame(inspector_frame())
         .show(contexts.ctx_mut(), |ui| {
             apply_inspector_style(ui);
+
+            if !chain_label.is_empty() {
+                ui.label(
+                    egui::RichText::new(&chain_label)
+                        .size(12.0)
+                        .color(egui::Color32::from_rgb(140, 160, 180)),
+                );
+                ui.add_space(2.0);
+            }
 
             ui.label(
                 egui::RichText::new(format!("Block #{}", slab.number))
@@ -216,6 +231,15 @@ fn show_block_panel(contexts: &mut EguiContexts, slab: &BlockSlab) {
 
             ui.label(format!("Transactions {}", slab.tx_count));
             ui.label(format!("Timestamp    {}", slab.timestamp));
+
+            if let Some(l1_origin) = slab.l1_origin_number {
+                ui.add_space(4.0);
+                ui.label(
+                    egui::RichText::new(format!("L1 Origin    #{l1_origin}"))
+                        .color(egui::Color32::from_rgb(160, 140, 200)),
+                );
+            }
+
             ui.add_space(12.0);
 
             dismiss_hint(ui);

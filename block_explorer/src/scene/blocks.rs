@@ -1,31 +1,77 @@
 //! Block slabs: ingest_blocks system, ExplorerState, BlockSlab component.
 
+use std::collections::HashMap;
+
+use alloy_chains::Chain;
+
 use crate::data::BlockChannel;
 use crate::render::RendererResource;
+use crate::scene::blob_links::BlobLinkRegistry;
 use crate::ui::HudState;
 use bevy::prelude::*;
 
-/// Tracks how many blocks we've rendered and current Z position.
-#[derive(Resource, Default)]
-pub struct ExplorerState {
-    pub blocks_rendered: u64,
+const DEFAULT_LANE_SPACING: f32 = 15.0;
+
+/// Per-chain lane positioning state.
+pub struct LaneState {
     pub z_cursor: f32,
+    pub x_offset: f32,
+    pub blocks_rendered: u64,
+}
+
+/// Tracks per-chain lane state for multi-chain visualization.
+#[derive(Resource)]
+pub struct ExplorerState {
+    pub lanes: HashMap<Chain, LaneState>,
+    pub lane_spacing: f32,
+    next_lane_index: usize,
+}
+
+impl Default for ExplorerState {
+    fn default() -> Self {
+        Self {
+            lanes: HashMap::new(),
+            lane_spacing: DEFAULT_LANE_SPACING,
+            next_lane_index: 0,
+        }
+    }
+}
+
+impl ExplorerState {
+    /// Returns the lane for the given chain, creating one if it doesn't exist.
+    pub fn lane_for(&mut self, chain: Chain) -> &mut LaneState {
+        let spacing = self.lane_spacing;
+        let next = &mut self.next_lane_index;
+        self.lanes.entry(chain).or_insert_with(|| {
+            let index = *next;
+            *next += 1;
+            LaneState {
+                z_cursor: 0.0,
+                x_offset: index as f32 * spacing,
+                blocks_rendered: 0,
+            }
+        })
+    }
 }
 
 /// Marker + data for slab entities.
 #[derive(Component)]
 pub struct BlockSlab {
+    pub chain: Chain,
     pub number: u64,
     pub gas_used: u64,
     pub gas_limit: u64,
     pub timestamp: u64,
     pub tx_count: u32,
+    pub l1_origin_number: Option<u64>,
 }
 
 /// Entry in the block registry for timeline navigation.
 pub struct BlockEntry {
+    pub chain: Chain,
     pub number: u64,
     pub z_position: f32,
+    pub x_offset: f32,
     pub timestamp: u64,
     pub gas_fullness: f32,
     pub gas_used: u64,
@@ -121,12 +167,22 @@ pub fn ingest_blocks(
     mut hud_state: ResMut<HudState>,
     mut images: ResMut<Assets<Image>>,
     mut registry: ResMut<BlockRegistry>,
+    blob_links: Option<ResMut<BlobLinkRegistry>>,
 ) {
     let mut received = 0usize;
+    let mut blob_links = blob_links;
     while received < MAX_BLOCKS_PER_FRAME {
         match channel.0.try_recv() {
             Ok(payload) => {
                 hud_state.update_from_payload(&payload);
+
+                if let (Some(l1_origin), Some(ref mut links)) =
+                    (payload.l1_origin_number, blob_links.as_mut())
+                {
+                    links.register(l1_origin, payload.chain, payload.number);
+                }
+
+                let x_offset = state.lane_for(payload.chain).x_offset;
                 renderer.0.spawn_block(
                     &mut commands,
                     &mut meshes,
@@ -135,6 +191,7 @@ pub fn ingest_blocks(
                     &mut state,
                     &mut registry,
                     &payload,
+                    x_offset,
                 );
                 received += 1;
             }

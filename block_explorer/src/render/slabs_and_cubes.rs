@@ -90,6 +90,7 @@ impl BlockRenderer for SlabsAndCubesRenderer {
         state: &mut ResMut<crate::scene::blocks::ExplorerState>,
         registry: &mut ResMut<crate::scene::blocks::BlockRegistry>,
         payload: &BlockPayload,
+        x_offset: f32,
     ) {
         let slab_settings = &self.settings.slab;
         let tx_settings = &self.settings.tx;
@@ -112,11 +113,16 @@ impl BlockRenderer for SlabsAndCubesRenderer {
             ..default()
         });
 
-        state.z_cursor -= slab_settings.z_spacing;
-        state.blocks_rendered += 1;
+        let lane = state.lane_for(payload.chain);
+        lane.z_cursor -= slab_settings.z_spacing;
+        lane.blocks_rendered += 1;
+        let z_cursor = lane.z_cursor;
+
         registry.entries.push(BlockEntry {
+            chain: payload.chain,
             number: payload.number,
-            z_position: state.z_cursor,
+            z_position: z_cursor,
+            x_offset,
             timestamp: payload.timestamp,
             gas_fullness: fullness,
             gas_used: payload.gas_used,
@@ -133,18 +139,20 @@ impl BlockRenderer for SlabsAndCubesRenderer {
                 slab_settings.depth,
             ))),
             MeshMaterial3d(original_material.clone()),
-            Transform::from_xyz(0.0, 0.0, state.z_cursor),
+            Transform::from_xyz(x_offset, 0.0, z_cursor),
             Visibility::Visible,
             HeatmapMaterial {
                 original: original_material,
                 heatmap: heatmap_material,
             },
             BlockSlab {
+                chain: payload.chain,
                 number: payload.number,
                 gas_used: payload.gas_used,
                 gas_limit: payload.gas_limit,
                 timestamp: payload.timestamp,
                 tx_count: payload.tx_count,
+                l1_origin_number: payload.l1_origin_number,
             },
         ));
 
@@ -154,14 +162,15 @@ impl BlockRenderer for SlabsAndCubesRenderer {
             materials,
             meshes,
             payload.number,
-            state.z_cursor,
+            z_cursor,
             width,
+            x_offset,
         );
 
         spawn_tx_cubes(
             commands,
             payload,
-            state.z_cursor,
+            z_cursor,
             meshes,
             materials,
             images,
@@ -171,6 +180,7 @@ impl BlockRenderer for SlabsAndCubesRenderer {
             tx_settings,
             cluster_settings,
             blob_settings,
+            x_offset,
         );
     }
 }
@@ -189,12 +199,12 @@ fn spawn_tx_cubes(
     settings: &TxRenderSettings,
     cluster_settings: &ClusterLabelSettings,
     blob_settings: &BlobRenderSettings,
+    x_offset: f32,
 ) {
     if payload.transactions.is_empty() {
         return;
     }
 
-    // Group transactions by `to` address for clustering
     let ordered_txs = cluster_transactions(&payload.transactions);
     let positions = grid_positions(
         ordered_txs.len(),
@@ -213,11 +223,11 @@ fn spawn_tx_cubes(
         let y = slab_height / 2.0 + height / 2.0;
         let material = materials::tx_cube_material(materials_res, tx, payload.transactions.len());
 
-        let world_pos = Vec3::new(pos.0, y, z + pos.1);
+        let world_pos = Vec3::new(x_offset + pos.0, y, z + pos.1);
         let mut entity_commands = commands.spawn((
             Mesh3d(meshes.add(Cuboid::new(settings.cube_base, height, settings.cube_base))),
             MeshMaterial3d(material),
-            Transform::from_xyz(pos.0, y, z + pos.1),
+            Transform::from_xyz(x_offset + pos.0, y, z + pos.1),
             Visibility::Visible,
             TxCube {
                 hash: format!("{}", tx.hash),
@@ -234,7 +244,6 @@ fn spawn_tx_cubes(
             },
         ));
 
-        // Spawn blob spheres as children of blob-carrying transactions
         if tx.blob_count > 0 {
             spawn_blob_spheres(
                 &mut entity_commands,
@@ -248,7 +257,6 @@ fn spawn_tx_cubes(
         }
     }
 
-    // Spawn cluster labels for top groups
     spawn_cluster_labels(
         commands,
         &ordered_txs,
@@ -259,6 +267,7 @@ fn spawn_tx_cubes(
         images,
         slab_height,
         cluster_settings,
+        x_offset,
     );
 }
 
@@ -287,6 +296,7 @@ fn spawn_cluster_labels(
     images: &mut ResMut<Assets<Image>>,
     slab_height: f32,
     settings: &ClusterLabelSettings,
+    x_offset: f32,
 ) {
     if ordered_txs.is_empty() || positions.is_empty() {
         return;
@@ -338,7 +348,7 @@ fn spawn_cluster_labels(
             materials_res,
             images,
             label,
-            Vec3::new(centroid_x, slab_height + 0.6, z + centroid_z),
+            Vec3::new(x_offset + centroid_x, slab_height + 0.6, z + centroid_z),
             settings.quad_height,
         );
     }
