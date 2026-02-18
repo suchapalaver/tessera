@@ -6,7 +6,7 @@ use bevy::prelude::*;
 use crate::data::{BlockPayload, TxPayload};
 use crate::render::BlockRenderer;
 use crate::scene::blocks::{BlockEntry, BlockSlab, HeatmapMaterial};
-use crate::scene::{labels, materials, TxCube};
+use crate::scene::{labels, materials, BlockLabel, TxCube};
 
 #[derive(Clone, Debug)]
 pub struct SlabSettings {
@@ -63,8 +63,8 @@ impl Default for SlabsAndCubesSettings {
                 max_height: 0.6,
             },
             clusters: ClusterLabelSettings {
-                max_labels: 3,
-                quad_height: 0.3,
+                max_labels: 1,
+                quad_height: 0.4,
             },
             blobs: BlobRenderSettings {
                 sphere_radius: 0.06,
@@ -105,7 +105,7 @@ impl BlockRenderer for SlabsAndCubesRenderer {
 
         let width = slab_settings.base_width + slab_settings.width_scale * fullness;
         let original_material = materials::block_slab_material_with_fullness(materials, fullness);
-        let heatmap_image = materials::generate_heatmap_image(&payload.transactions);
+        let heatmap_image = materials::generate_heatmap_image(&payload.transactions, payload.chain);
         let heatmap_img_handle = images.add(heatmap_image);
         let heatmap_material = materials.add(StandardMaterial {
             base_color_texture: Some(heatmap_img_handle),
@@ -161,6 +161,7 @@ impl BlockRenderer for SlabsAndCubesRenderer {
             images,
             materials,
             meshes,
+            payload.chain,
             payload.number,
             z_cursor,
             width,
@@ -221,7 +222,12 @@ fn spawn_tx_cubes(
         let pos = positions[i];
         let height = tx_height(tx, settings);
         let y = slab_height / 2.0 + height / 2.0;
-        let material = materials::tx_cube_material(materials_res, tx, payload.transactions.len());
+        let material = materials::tx_cube_material(
+            materials_res,
+            tx,
+            payload.transactions.len(),
+            payload.chain,
+        );
 
         let world_pos = Vec3::new(x_offset + pos.0, y, z + pos.1);
         let mut entity_commands = commands.spawn((
@@ -230,6 +236,7 @@ fn spawn_tx_cubes(
             Transform::from_xyz(x_offset + pos.0, y, z + pos.1),
             Visibility::Visible,
             TxCube {
+                chain: payload.chain,
                 hash: format!("{}", tx.hash),
                 tx_index: tx.tx_index,
                 gas: tx.gas,
@@ -257,6 +264,10 @@ fn spawn_tx_cubes(
         }
     }
 
+    let tag = BlockLabel {
+        chain: payload.chain,
+        block_number: payload.number,
+    };
     spawn_cluster_labels(
         commands,
         &ordered_txs,
@@ -268,6 +279,7 @@ fn spawn_tx_cubes(
         slab_height,
         cluster_settings,
         x_offset,
+        &tag,
     );
 }
 
@@ -297,6 +309,7 @@ fn spawn_cluster_labels(
     slab_height: f32,
     settings: &ClusterLabelSettings,
     x_offset: f32,
+    tag: &BlockLabel,
 ) {
     if ordered_txs.is_empty() || positions.is_empty() {
         return;
@@ -348,8 +361,9 @@ fn spawn_cluster_labels(
             materials_res,
             images,
             label,
-            Vec3::new(x_offset + centroid_x, slab_height + 0.6, z + centroid_z),
+            Vec3::new(x_offset + centroid_x, slab_height + 1.4, z + centroid_z),
             settings.quad_height,
+            tag,
         );
     }
 }
@@ -363,6 +377,7 @@ fn cluster_label(addr: &Address) -> String {
     format!("{}..{}", &s[..6], &s[s.len() - 4..])
 }
 
+#[allow(clippy::too_many_arguments)]
 fn spawn_cluster_label_quad(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
@@ -371,6 +386,7 @@ fn spawn_cluster_label_quad(
     text: &str,
     position: Vec3,
     quad_height: f32,
+    tag: &BlockLabel,
 ) {
     let image = crate::scene::labels::render_label_image(text);
     let img_w = image.width();
@@ -393,7 +409,8 @@ fn spawn_cluster_label_quad(
     commands.spawn((
         Mesh3d(meshes.add(Rectangle::new(quad_w, quad_height))),
         MeshMaterial3d(material),
-        Transform::from_translation(position).looking_at(position + Vec3::Z, Vec3::Y),
+        Transform::from_translation(position).looking_at(position - Vec3::Z, Vec3::Y),
+        tag.clone(),
     ));
 }
 

@@ -6,7 +6,9 @@ use crate::camera::fly_camera_plugin;
 use crate::config;
 use crate::data::{init_multi_chain_channel, FetcherConfig};
 use crate::render::{BlockRenderer, RendererResource, SlabsAndCubesRenderer};
-use crate::scene::{arc_plugin, blob_link_plugin, heatmap_plugin, ingest_blocks, setup_scene};
+use crate::scene::{
+    arc_plugin, blob_link_plugin, cleanup_old_blocks, heatmap_plugin, ingest_blocks, setup_scene,
+};
 use crate::ui::{hud_plugin, inspector_plugin, timeline_plugin};
 
 /// Builder for constructing a Tessera app with customizable plugins.
@@ -153,7 +155,7 @@ impl BlockExplorerBuilder {
         .insert_resource(ClearColor(self.clear_color))
         .insert_resource(channel)
         .add_systems(Startup, setup_scene)
-        .add_systems(Update, ingest_blocks);
+        .add_systems(Update, (ingest_blocks, cleanup_old_blocks));
 
         renderer.setup(&mut app);
         app.insert_resource(RendererResource(renderer));

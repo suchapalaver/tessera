@@ -9,6 +9,7 @@ mod transactions;
 pub use arcs::arc_plugin;
 pub use blob_links::blob_link_plugin;
 pub use blocks::{
-    heatmap_plugin, ingest_blocks, setup_scene, BlockEntry, BlockRegistry, BlockSlab, HeatmapState,
+    cleanup_old_blocks, heatmap_plugin, ingest_blocks, setup_scene, BlockEntry, BlockRegistry,
+    BlockSlab, HeatmapState,
 };
-pub use transactions::TxCube;
+pub use transactions::{BlockLabel, TxCube};

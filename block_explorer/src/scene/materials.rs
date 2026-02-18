@@ -1,7 +1,9 @@
 //! Shared material and color helpers for slabs and tx cubes.
 
-use crate::data::TxPayload;
+use alloy_chains::Chain;
 use bevy::prelude::*;
+
+use crate::data::TxPayload;
 
 pub fn block_slab_material_with_fullness(
     materials: &mut ResMut<Assets<StandardMaterial>>,
@@ -18,9 +20,10 @@ pub fn tx_cube_material(
     materials: &mut ResMut<Assets<StandardMaterial>>,
     tx: &TxPayload,
     tx_count: usize,
+    chain: Chain,
 ) -> Handle<StandardMaterial> {
     let gwei = tx.gas_price as f64 / 1e9;
-    let color = gas_price_color(gwei);
+    let color = gas_price_color(gwei, gas_price_range(chain));
 
     // Position-based brightness: first tx = full, last tx = 40%
     let brightness = if tx_count > 1 {
@@ -51,18 +54,19 @@ pub fn tx_cube_material(
 
 /// Generates a heatmap image from transaction gas prices.
 /// Each pixel column represents one transaction, colored by gas price.
-pub(crate) fn generate_heatmap_image(txs: &[TxPayload]) -> Image {
+pub(crate) fn generate_heatmap_image(txs: &[TxPayload], chain: Chain) -> Image {
     use bevy::image::ImageSampler;
     use bevy::render::render_asset::RenderAssetUsages;
     use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 
+    let max_gwei = gas_price_range(chain);
     let width = txs.len().max(1) as u32;
     let height: u32 = 16;
     let mut data = vec![0u8; (width * height * 4) as usize];
 
     for (i, tx) in txs.iter().enumerate() {
         let gwei = tx.gas_price as f64 / 1e9;
-        let color = gas_price_color(gwei);
+        let color = gas_price_color(gwei, max_gwei);
         let lin = color.to_linear();
         let r = (lin.red * 255.0) as u8;
         let g = (lin.green * 255.0) as u8;
@@ -92,9 +96,20 @@ pub(crate) fn generate_heatmap_image(txs: &[TxPayload]) -> Image {
     image
 }
 
-/// Blue → Cyan → Yellow → Red gradient mapped to 0–200 gwei.
-fn gas_price_color(gwei: f64) -> Color {
-    let t = (gwei / 200.0).clamp(0.0, 1.0) as f32;
+/// Gas price range (in gwei) for the color gradient.
+/// L1 uses 0–200 gwei; OP Stack L2s use 0–0.1 gwei so the gradient
+/// actually differentiates transactions at sub-gwei prices.
+fn gas_price_range(chain: Chain) -> f64 {
+    if crate::data::is_op_stack(&chain) {
+        0.02
+    } else {
+        200.0
+    }
+}
+
+/// Blue → Cyan → Yellow → Red gradient mapped to 0–`max_gwei`.
+fn gas_price_color(gwei: f64, max_gwei: f64) -> Color {
+    let t = (gwei / max_gwei).clamp(0.0, 1.0) as f32;
 
     if t < 0.33 {
         let s = t / 0.33;
@@ -131,7 +146,7 @@ mod tests {
     #[test]
     fn heatmap_image_has_expected_size_and_colors() {
         let txs = vec![tx_with_gas(0, 0), tx_with_gas(200, 1)];
-        let image = generate_heatmap_image(&txs);
+        let image = generate_heatmap_image(&txs, Chain::mainnet());
 
         let width = image.texture_descriptor.size.width as usize;
         let height = image.texture_descriptor.size.height as usize;

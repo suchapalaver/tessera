@@ -1,12 +1,13 @@
 //! Block slabs: ingest_blocks system, ExplorerState, BlockSlab component.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use alloy_chains::Chain;
 
 use crate::data::BlockChannel;
 use crate::render::RendererResource;
 use crate::scene::blob_links::BlobLinkRegistry;
+use crate::scene::BlockLabel;
 use crate::ui::HudState;
 use bevy::prelude::*;
 
@@ -197,6 +198,69 @@ pub fn ingest_blocks(
             }
             Err(_) => break,
         }
+    }
+}
+
+const MAX_BLOCKS_PER_LANE: usize = 50;
+
+/// Despawns old block entities when a lane exceeds the rolling window size.
+/// Removes slabs, transaction cubes (with blob sphere children), and labels.
+pub fn cleanup_old_blocks(
+    mut commands: Commands,
+    slabs: Query<(Entity, &BlockSlab)>,
+    cubes: Query<(Entity, &crate::scene::TxCube)>,
+    labels: Query<(Entity, &BlockLabel)>,
+    mut registry: ResMut<BlockRegistry>,
+    blob_link_registry: Option<ResMut<BlobLinkRegistry>>,
+) {
+    // Group slabs by chain, collect (entity, block_number)
+    let mut chain_slabs: HashMap<Chain, Vec<(Entity, u64)>> = HashMap::new();
+    for (entity, slab) in &slabs {
+        chain_slabs
+            .entry(slab.chain)
+            .or_default()
+            .push((entity, slab.number));
+    }
+
+    let mut removed: HashSet<(Chain, u64)> = HashSet::new();
+
+    for (chain, mut blocks) in chain_slabs {
+        if blocks.len() <= MAX_BLOCKS_PER_LANE {
+            continue;
+        }
+        blocks.sort_by_key(|&(_, num)| num);
+        let to_remove = blocks.len() - MAX_BLOCKS_PER_LANE;
+        for &(entity, number) in &blocks[..to_remove] {
+            commands.entity(entity).despawn();
+            removed.insert((chain, number));
+        }
+    }
+
+    if removed.is_empty() {
+        return;
+    }
+
+    // Despawn cubes (and their blob sphere children)
+    for (entity, cube) in &cubes {
+        if removed.contains(&(cube.chain, cube.block_number)) {
+            commands.entity(entity).despawn_recursive();
+        }
+    }
+
+    // Despawn labels
+    for (entity, label) in &labels {
+        if removed.contains(&(label.chain, label.block_number)) {
+            commands.entity(entity).despawn();
+        }
+    }
+
+    // Clean up registries
+    registry
+        .entries
+        .retain(|e| !removed.contains(&(e.chain, e.number)));
+
+    if let Some(mut links) = blob_link_registry {
+        links.remove_blocks(&removed);
     }
 }
 

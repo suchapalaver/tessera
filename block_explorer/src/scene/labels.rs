@@ -2,10 +2,13 @@
 
 use std::f32::consts::{FRAC_PI_2, PI};
 
+use alloy_chains::Chain;
 use bevy::image::ImageSampler;
 use bevy::prelude::*;
 use bevy::render::render_asset::RenderAssetUsages;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
+
+use crate::scene::BlockLabel;
 
 const GLYPH_W: u32 = 5;
 const GLYPH_H: u32 = 7;
@@ -417,9 +420,9 @@ pub(crate) fn render_label_image(text: &str) -> Image {
                     let px = x_off + col;
                     let py = row;
                     let idx = ((py * img_w + px) * 4) as usize;
-                    data[idx] = 150;
-                    data[idx + 1] = 230;
-                    data[idx + 2] = 190;
+                    data[idx] = 200;
+                    data[idx + 1] = 220;
+                    data[idx + 2] = 210;
                     data[idx + 3] = 255;
                 }
             }
@@ -458,11 +461,16 @@ pub fn spawn_block_labels(
     images: &mut ResMut<Assets<Image>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
     meshes: &mut ResMut<Assets<Mesh>>,
+    chain: Chain,
     block_number: u64,
     slab_z: f32,
     slab_width: f32,
     x_offset: f32,
 ) {
+    let tag = BlockLabel {
+        chain,
+        block_number,
+    };
     let text = format!("#{block_number}");
     let char_count = text.len() as u32;
     let img_w = char_count * GLYPH_W + char_count.saturating_sub(1) * GLYPH_PAD;
@@ -493,6 +501,7 @@ pub fn spawn_block_labels(
         Mesh3d(fb_mesh.clone()),
         MeshMaterial3d(material.clone()),
         Transform::from_translation(pos + Vec3::new(0.0, 0.0, hd + FACE_OFFSET)),
+        tag.clone(),
     ));
     // Back (-Z)
     commands.spawn((
@@ -500,6 +509,7 @@ pub fn spawn_block_labels(
         MeshMaterial3d(material.clone()),
         Transform::from_translation(pos + Vec3::new(0.0, 0.0, -hd - FACE_OFFSET))
             .with_rotation(Quat::from_rotation_y(PI)),
+        tag.clone(),
     ));
     // Right (+X)
     commands.spawn((
@@ -507,6 +517,7 @@ pub fn spawn_block_labels(
         MeshMaterial3d(material.clone()),
         Transform::from_translation(pos + Vec3::new(hw + FACE_OFFSET, 0.0, 0.0))
             .with_rotation(Quat::from_rotation_y(FRAC_PI_2)),
+        tag.clone(),
     ));
     // Left (-X)
     commands.spawn((
@@ -514,5 +525,6 @@ pub fn spawn_block_labels(
         MeshMaterial3d(material),
         Transform::from_translation(pos + Vec3::new(-hw - FACE_OFFSET, 0.0, 0.0))
             .with_rotation(Quat::from_rotation_y(-FRAC_PI_2)),
+        tag,
     ));
 }

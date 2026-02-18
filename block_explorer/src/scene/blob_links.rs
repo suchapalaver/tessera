@@ -29,6 +29,14 @@ impl BlobLinkRegistry {
             l2_block_number,
         });
     }
+
+    /// Remove links referencing any of the given (chain, block_number) pairs.
+    pub fn remove_blocks(&mut self, removed: &std::collections::HashSet<(Chain, u64)>) {
+        self.links.retain(|link| {
+            !removed.contains(&(Chain::mainnet(), link.l1_block_number))
+                && !removed.contains(&(link.l2_chain, link.l2_block_number))
+        });
+    }
 }
 
 /// Controls blob link arc visibility. Toggled with `B`.
@@ -58,11 +66,14 @@ fn toggle_blob_links_system(
     }
 }
 
-/// Base brand blue for Base chain arcs.
-const BASE_COLOR: Color = Color::srgb(0.0, 0.322, 1.0);
-/// Optimism red for OP Mainnet arcs.
-const OPTIMISM_COLOR: Color = Color::srgb(1.0, 0.016, 0.125);
+/// Base brand blue for Base chain arcs (low alpha — recedes behind blocks).
+const BASE_COLOR: Color = Color::srgba(0.0, 0.322, 1.0, 0.25);
+/// Optimism red for OP Mainnet arcs (low alpha).
+const OPTIMISM_COLOR: Color = Color::srgba(1.0, 0.016, 0.125, 0.25);
 
+/// Groups links by (l2_chain, l1_block_number) so we draw one arc per
+/// L1-origin group instead of one per L2 block. Each arc connects the
+/// L1 slab to the centroid of its child L2 slabs.
 fn draw_blob_links_system(
     mut gizmos: Gizmos,
     settings: Res<BlobLinkSettings>,
@@ -80,48 +91,65 @@ fn draw_blob_links_system(
         slab_positions.insert((slab.chain, slab.number), transform.translation());
     }
 
-    // Also build lookup from block number → entry for timestamp comparison
     let mut block_timestamps: HashMap<(Chain, u64), u64> = HashMap::new();
     for entry in &registry.entries {
         block_timestamps.insert((entry.chain, entry.number), entry.timestamp);
     }
 
+    // Group links by (l2_chain, l1_block_number) → list of L2 block numbers
+    let mut groups: HashMap<(Chain, u64), Vec<u64>> = HashMap::new();
     for link in &link_registry.links {
-        // Find L1 slab position (mainnet)
-        let Some(&l1_pos) = slab_positions.get(&(Chain::mainnet(), link.l1_block_number)) else {
+        groups
+            .entry((link.l2_chain, link.l1_block_number))
+            .or_default()
+            .push(link.l2_block_number);
+    }
+
+    for ((l2_chain, l1_block_number), l2_blocks) in &groups {
+        let Some(&l1_pos) = slab_positions.get(&(Chain::mainnet(), *l1_block_number)) else {
             continue;
         };
 
-        // Find L2 slab position
-        let Some(&l2_pos) = slab_positions.get(&(link.l2_chain, link.l2_block_number)) else {
+        // Compute centroid of all L2 slabs in this group
+        let mut centroid = Vec3::ZERO;
+        let mut count = 0u32;
+        for &l2_num in l2_blocks {
+            if let Some(&pos) = slab_positions.get(&(*l2_chain, l2_num)) {
+                centroid += pos;
+                count += 1;
+            }
+        }
+        if count == 0 {
             continue;
-        };
+        }
+        let l2_centroid = centroid / count as f32;
 
-        // Arc color based on L2 chain
-        let color = chain_arc_color(link.l2_chain);
+        let color = chain_arc_color(*l2_chain);
 
-        // Arc height proportional to the time gap between L1 and L2 blocks
+        // Arc height from average time gap
         let l1_ts = block_timestamps
-            .get(&(Chain::mainnet(), link.l1_block_number))
+            .get(&(Chain::mainnet(), *l1_block_number))
             .copied()
             .unwrap_or(0);
-        let l2_ts = block_timestamps
-            .get(&(link.l2_chain, link.l2_block_number))
-            .copied()
-            .unwrap_or(0);
-        let time_gap = l2_ts.saturating_sub(l1_ts) as f32;
+        let avg_l2_ts: u64 = l2_blocks
+            .iter()
+            .filter_map(|n| block_timestamps.get(&(*l2_chain, *n)).copied())
+            .sum::<u64>()
+            / count as u64;
+        let time_gap = avg_l2_ts.saturating_sub(l1_ts) as f32;
         let arc_height = 2.0 + (time_gap / 12.0).min(8.0);
 
-        // Draw cubic bezier arc between L1 and L2 slabs
-        let mid = (l1_pos + l2_pos) / 2.0 + Vec3::Y * arc_height;
+        // Draw one bezier arc from L1 slab to L2 group centroid
+        let mid = (l1_pos + l2_centroid) / 2.0 + Vec3::Y * arc_height;
         let control1 = l1_pos.lerp(mid, 0.5) + Vec3::Y * arc_height * 0.3;
-        let control2 = mid.lerp(l2_pos, 0.5) + Vec3::Y * arc_height * 0.3;
+        let control2 = mid.lerp(l2_centroid, 0.5) + Vec3::Y * arc_height * 0.3;
 
-        let segments = 20;
+        // More segments for larger groups (subtle detail reward)
+        let segments = 16 + count.min(8) as usize;
         let mut prev = l1_pos;
         for s in 1..=segments {
             let t = s as f32 / segments as f32;
-            let point = cubic_bezier(l1_pos, control1, control2, l2_pos, t);
+            let point = cubic_bezier(l1_pos, control1, control2, l2_centroid, t);
             gizmos.line(prev, point, color);
             prev = point;
         }
