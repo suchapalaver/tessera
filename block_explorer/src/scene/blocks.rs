@@ -12,20 +12,27 @@ use crate::ui::HudState;
 use bevy::prelude::*;
 
 const DEFAULT_LANE_SPACING: f32 = 15.0;
+/// Z units per second of block time. Converts timestamps to spatial positions
+/// so blocks from all chains align temporally. At 2.0, Base blocks (~2s apart)
+/// get 4.0 units of spacing, matching the previous fixed z_spacing.
+const Z_PER_SECOND: f32 = 2.0;
+/// Rolling time window in seconds. Blocks older than this are despawned.
+const WINDOW_SECONDS: u64 = 120;
 
 /// Per-chain lane positioning state.
 pub struct LaneState {
-    pub z_cursor: f32,
     pub x_offset: f32,
     pub blocks_rendered: u64,
 }
 
 /// Tracks per-chain lane state for multi-chain visualization.
+/// Z positions are derived from block timestamps so all chains align temporally.
 #[derive(Resource)]
 pub struct ExplorerState {
     pub lanes: HashMap<Chain, LaneState>,
     pub lane_spacing: f32,
     next_lane_index: usize,
+    reference_timestamp: Option<u64>,
 }
 
 impl Default for ExplorerState {
@@ -34,6 +41,7 @@ impl Default for ExplorerState {
             lanes: HashMap::new(),
             lane_spacing: DEFAULT_LANE_SPACING,
             next_lane_index: 0,
+            reference_timestamp: None,
         }
     }
 }
@@ -47,11 +55,17 @@ impl ExplorerState {
             let index = *next;
             *next += 1;
             LaneState {
-                z_cursor: 0.0,
                 x_offset: index as f32 * spacing,
                 blocks_rendered: 0,
             }
         })
+    }
+
+    /// Computes the Z position for a block based on its timestamp.
+    /// The first block received sets the reference; all others are relative to it.
+    pub fn z_for_timestamp(&mut self, timestamp: u64) -> f32 {
+        let reference = *self.reference_timestamp.get_or_insert(timestamp);
+        -((timestamp as f64 - reference as f64) * Z_PER_SECOND as f64) as f32
     }
 }
 
@@ -143,9 +157,10 @@ const MAX_BLOCKS_PER_FRAME: usize = 5;
 pub fn setup_scene(mut commands: Commands) {
     commands.insert_resource(ExplorerState::default());
     commands.insert_resource(BlockRegistry::default());
+    let mid_x = DEFAULT_LANE_SPACING / 2.0;
     commands.spawn((
         Camera3d::default(),
-        Transform::from_xyz(0., 5., 10.).looking_at(Vec3::ZERO, Vec3::Y),
+        Transform::from_xyz(mid_x, 8., 15.).looking_at(Vec3::new(mid_x, 0., -10.), Vec3::Y),
     ));
     commands.spawn((
         DirectionalLight::default(),
@@ -201,10 +216,8 @@ pub fn ingest_blocks(
     }
 }
 
-const MAX_BLOCKS_PER_LANE: usize = 50;
-
-/// Despawns old block entities when a lane exceeds the rolling window size.
-/// Removes slabs, transaction cubes (with blob sphere children), and labels.
+/// Despawns blocks outside the rolling time window.
+/// All chains share the same temporal window so lanes stay aligned.
 pub fn cleanup_old_blocks(
     mut commands: Commands,
     slabs: Query<(Entity, &BlockSlab)>,
@@ -213,26 +226,19 @@ pub fn cleanup_old_blocks(
     mut registry: ResMut<BlockRegistry>,
     blob_link_registry: Option<ResMut<BlobLinkRegistry>>,
 ) {
-    // Group slabs by chain, collect (entity, block_number)
-    let mut chain_slabs: HashMap<Chain, Vec<(Entity, u64)>> = HashMap::new();
-    for (entity, slab) in &slabs {
-        chain_slabs
-            .entry(slab.chain)
-            .or_default()
-            .push((entity, slab.number));
+    // Find the latest timestamp across all chains
+    let latest_ts = slabs.iter().map(|(_, s)| s.timestamp).max().unwrap_or(0);
+    if latest_ts == 0 {
+        return;
     }
+    let cutoff = latest_ts.saturating_sub(WINDOW_SECONDS);
 
     let mut removed: HashSet<(Chain, u64)> = HashSet::new();
 
-    for (chain, mut blocks) in chain_slabs {
-        if blocks.len() <= MAX_BLOCKS_PER_LANE {
-            continue;
-        }
-        blocks.sort_by_key(|&(_, num)| num);
-        let to_remove = blocks.len() - MAX_BLOCKS_PER_LANE;
-        for &(entity, number) in &blocks[..to_remove] {
+    for (entity, slab) in &slabs {
+        if slab.timestamp < cutoff {
             commands.entity(entity).despawn();
-            removed.insert((chain, number));
+            removed.insert((slab.chain, slab.number));
         }
     }
 
@@ -240,21 +246,18 @@ pub fn cleanup_old_blocks(
         return;
     }
 
-    // Despawn cubes (and their blob sphere children)
     for (entity, cube) in &cubes {
         if removed.contains(&(cube.chain, cube.block_number)) {
             commands.entity(entity).despawn_recursive();
         }
     }
 
-    // Despawn labels
     for (entity, label) in &labels {
         if removed.contains(&(label.chain, label.block_number)) {
             commands.entity(entity).despawn();
         }
     }
 
-    // Clean up registries
     registry
         .entries
         .retain(|e| !removed.contains(&(e.chain, e.number)));

@@ -100,6 +100,7 @@ fn hud_overlay_system(
     diagnostics: Res<DiagnosticsStore>,
     heatmap_state: Res<crate::scene::HeatmapState>,
     arc_settings: Res<crate::scene::arcs::ArcSettings>,
+    blob_link_settings: Option<Res<crate::scene::blob_links::BlobLinkSettings>>,
 ) {
     let fps = diagnostics
         .get(&FrameTimeDiagnosticsPlugin::FPS)
@@ -195,8 +196,13 @@ fn hud_overlay_system(
                     .size(11.0)
                     .color(egui::Color32::from_rgb(120, 160, 140)),
             );
+            let blob_label = match blob_link_settings.as_ref() {
+                Some(s) if s.enabled => "[B] Blob links ON",
+                Some(_) => "[B] Blob links OFF",
+                None => "[B] Blob links",
+            };
             ui.label(
-                egui::RichText::new("[B] Blob links")
+                egui::RichText::new(blob_label)
                     .size(11.0)
                     .color(egui::Color32::from_rgb(120, 160, 140)),
             );

@@ -1,11 +1,15 @@
 //! Cross-lane blob link arcs between L2 blocks and their L1 origin blocks.
+//!
+//! Each OP Stack L2 block references an L1 "origin" block via a deposit tx.
+//! Arcs bridge from L2 blocks to the nearest visible mainnet slab, showing
+//! the derivation relationship. Multiple L2 blocks sharing the same L1
+//! origin are drawn as a single grouped arc to reduce visual noise.
 
 use std::collections::HashMap;
 
 use alloy_chains::Chain;
 use bevy::prelude::*;
 
-use crate::scene::blocks::BlockRegistry;
 use crate::scene::BlockSlab;
 
 /// A link between an L2 block and the L1 block it was derived from.
@@ -30,12 +34,10 @@ impl BlobLinkRegistry {
         });
     }
 
-    /// Remove links referencing any of the given (chain, block_number) pairs.
+    /// Remove links whose L2 block has been despawned.
     pub fn remove_blocks(&mut self, removed: &std::collections::HashSet<(Chain, u64)>) {
-        self.links.retain(|link| {
-            !removed.contains(&(Chain::mainnet(), link.l1_block_number))
-                && !removed.contains(&(link.l2_chain, link.l2_block_number))
-        });
+        self.links
+            .retain(|link| !removed.contains(&(link.l2_chain, link.l2_block_number)));
     }
 }
 
@@ -67,93 +69,86 @@ fn toggle_blob_links_system(
 }
 
 /// Base brand blue for Base chain arcs (low alpha — recedes behind blocks).
-const BASE_COLOR: Color = Color::srgba(0.0, 0.322, 1.0, 0.25);
+const BASE_COLOR: Color = Color::srgba(0.0, 0.322, 1.0, 0.35);
 /// Optimism red for OP Mainnet arcs (low alpha).
-const OPTIMISM_COLOR: Color = Color::srgba(1.0, 0.016, 0.125, 0.25);
+const OPTIMISM_COLOR: Color = Color::srgba(1.0, 0.016, 0.125, 0.35);
 
-/// Groups links by (l2_chain, l1_block_number) so we draw one arc per
-/// L1-origin group instead of one per L2 block. Each arc connects the
-/// L1 slab to the centroid of its child L2 slabs.
+/// Draws arcs from groups of L2 blocks to the nearest visible mainnet slab.
+///
+/// L2 blocks sharing the same L1 origin are grouped into a single arc
+/// from their centroid. The arc targets the closest mainnet slab by Z depth,
+/// so arcs always connect to a visible block rather than empty space.
 fn draw_blob_links_system(
     mut gizmos: Gizmos,
     settings: Res<BlobLinkSettings>,
     link_registry: Res<BlobLinkRegistry>,
-    registry: Res<BlockRegistry>,
     slabs: Query<(&BlockSlab, &GlobalTransform)>,
 ) {
     if !settings.enabled || link_registry.links.is_empty() {
         return;
     }
 
-    // Build lookup from (chain, block_number) → world position
+    // Build lookup of currently visible slabs and collect mainnet positions.
     let mut slab_positions: HashMap<(Chain, u64), Vec3> = HashMap::new();
+    let mut mainnet_positions: Vec<Vec3> = Vec::new();
     for (slab, transform) in &slabs {
-        slab_positions.insert((slab.chain, slab.number), transform.translation());
+        let pos = transform.translation();
+        slab_positions.insert((slab.chain, slab.number), pos);
+        if slab.chain == Chain::mainnet() {
+            mainnet_positions.push(pos);
+        }
     }
 
-    let mut block_timestamps: HashMap<(Chain, u64), u64> = HashMap::new();
-    for entry in &registry.entries {
-        block_timestamps.insert((entry.chain, entry.number), entry.timestamp);
+    if mainnet_positions.is_empty() {
+        return;
     }
 
-    // Group links by (l2_chain, l1_block_number) → list of L2 block numbers
-    let mut groups: HashMap<(Chain, u64), Vec<u64>> = HashMap::new();
+    // Group L2 blocks by (l2_chain, l1_origin) → collect their positions.
+    let mut groups: HashMap<(Chain, u64), Vec<Vec3>> = HashMap::new();
     for link in &link_registry.links {
+        let Some(&l2_pos) = slab_positions.get(&(link.l2_chain, link.l2_block_number)) else {
+            continue;
+        };
         groups
             .entry((link.l2_chain, link.l1_block_number))
             .or_default()
-            .push(link.l2_block_number);
+            .push(l2_pos);
     }
 
-    for ((l2_chain, l1_block_number), l2_blocks) in &groups {
-        let Some(&l1_pos) = slab_positions.get(&(Chain::mainnet(), *l1_block_number)) else {
-            continue;
-        };
+    for ((l2_chain, _l1_origin), positions) in &groups {
+        let count = positions.len() as f32;
+        let centroid = positions.iter().copied().sum::<Vec3>() / count;
 
-        // Compute centroid of all L2 slabs in this group
-        let mut centroid = Vec3::ZERO;
-        let mut count = 0u32;
-        for &l2_num in l2_blocks {
-            if let Some(&pos) = slab_positions.get(&(*l2_chain, l2_num)) {
-                centroid += pos;
-                count += 1;
-            }
-        }
-        if count == 0 {
-            continue;
-        }
-        let l2_centroid = centroid / count as f32;
-
+        // Find the nearest visible mainnet slab by Z distance.
+        let target = nearest_by_z(&mainnet_positions, centroid.z);
         let color = chain_arc_color(*l2_chain);
 
-        // Arc height from average time gap
-        let l1_ts = block_timestamps
-            .get(&(Chain::mainnet(), *l1_block_number))
-            .copied()
-            .unwrap_or(0);
-        let avg_l2_ts: u64 = l2_blocks
-            .iter()
-            .filter_map(|n| block_timestamps.get(&(*l2_chain, *n)).copied())
-            .sum::<u64>()
-            / count as u64;
-        let time_gap = avg_l2_ts.saturating_sub(l1_ts) as f32;
-        let arc_height = 2.0 + (time_gap / 12.0).min(8.0);
+        let arc_height = 1.5;
+        let mid = (centroid + target) / 2.0 + Vec3::Y * arc_height;
+        let control1 = centroid.lerp(mid, 0.5) + Vec3::Y * arc_height * 0.3;
+        let control2 = mid.lerp(target, 0.5) + Vec3::Y * arc_height * 0.3;
 
-        // Draw one bezier arc from L1 slab to L2 group centroid
-        let mid = (l1_pos + l2_centroid) / 2.0 + Vec3::Y * arc_height;
-        let control1 = l1_pos.lerp(mid, 0.5) + Vec3::Y * arc_height * 0.3;
-        let control2 = mid.lerp(l2_centroid, 0.5) + Vec3::Y * arc_height * 0.3;
-
-        // More segments for larger groups (subtle detail reward)
-        let segments = 16 + count.min(8) as usize;
-        let mut prev = l1_pos;
+        let segments = 16;
+        let mut prev = centroid;
         for s in 1..=segments {
             let t = s as f32 / segments as f32;
-            let point = cubic_bezier(l1_pos, control1, control2, l2_centroid, t);
+            let point = cubic_bezier(centroid, control1, control2, target, t);
             gizmos.line(prev, point, color);
             prev = point;
         }
     }
+}
+
+/// Returns the position from `positions` closest to the given Z value.
+fn nearest_by_z(positions: &[Vec3], z: f32) -> Vec3 {
+    *positions
+        .iter()
+        .min_by(|a, b| {
+            let da = (a.z - z).abs();
+            let db = (b.z - z).abs();
+            da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .expect("positions must not be empty")
 }
 
 fn chain_arc_color(chain: Chain) -> Color {

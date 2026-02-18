@@ -14,7 +14,6 @@ pub struct SlabSettings {
     pub width_scale: f32,
     pub height: f32,
     pub depth: f32,
-    pub z_spacing: f32,
 }
 
 #[derive(Clone, Debug)]
@@ -54,7 +53,6 @@ impl Default for SlabsAndCubesSettings {
                 width_scale: 10.0,
                 height: 1.0,
                 depth: 2.0,
-                z_spacing: 4.0,
             },
             tx: TxRenderSettings {
                 grid_spacing: 0.25,
@@ -113,10 +111,9 @@ impl BlockRenderer for SlabsAndCubesRenderer {
             ..default()
         });
 
+        let z_cursor = state.z_for_timestamp(payload.timestamp);
         let lane = state.lane_for(payload.chain);
-        lane.z_cursor -= slab_settings.z_spacing;
         lane.blocks_rendered += 1;
-        let z_cursor = lane.z_cursor;
 
         registry.entries.push(BlockEntry {
             chain: payload.chain,
