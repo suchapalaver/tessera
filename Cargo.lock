@@ -2537,6 +2537,8 @@ dependencies = [
  "crossbeam-channel",
  "dotenvy",
  "op-alloy",
+ "serde",
+ "serde_json",
  "testcontainers-modules",
  "tokio",
  "url",

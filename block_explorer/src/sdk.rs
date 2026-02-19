@@ -1,13 +1,16 @@
 //! SDK entry points and builder for composing the block explorer app.
 
+use std::path::PathBuf;
+
 use bevy::prelude::*;
 
 use crate::camera::fly_camera_plugin;
 use crate::config;
-use crate::data::{init_multi_chain_channel, FetcherConfig};
+use crate::data::{init_fixture_channel, init_multi_chain_channel, FetcherConfig, RecordBuffer};
 use crate::render::{BlockRenderer, RendererResource, SlabsAndCubesRenderer};
 use crate::scene::{
-    arc_plugin, blob_link_plugin, cleanup_old_blocks, heatmap_plugin, ingest_blocks, setup_scene,
+    arc_plugin, blob_link_plugin, cleanup_old_blocks, flush_record_buffer, heatmap_plugin,
+    ingest_blocks, screenshot_plugin, setup_scene, ScreenshotMode,
 };
 use crate::ui::{hud_plugin, inspector_plugin, timeline_plugin};
 
@@ -25,6 +28,9 @@ pub struct BlockExplorerBuilder {
     enable_arcs: bool,
     enable_heatmap: bool,
     enable_blob_links: bool,
+    fixture_path: Option<PathBuf>,
+    screenshot_path: Option<PathBuf>,
+    record_path: Option<PathBuf>,
 }
 
 impl Default for BlockExplorerBuilder {
@@ -42,6 +48,9 @@ impl Default for BlockExplorerBuilder {
             enable_arcs: true,
             enable_heatmap: true,
             enable_blob_links: true,
+            fixture_path: None,
+            screenshot_path: None,
+            record_path: None,
         }
     }
 }
@@ -131,14 +140,54 @@ impl BlockExplorerBuilder {
         self
     }
 
+    /// Replay pre-recorded block data from a JSON fixture file instead of live RPC.
+    pub fn fixture(mut self, path: impl Into<PathBuf>) -> Self {
+        self.fixture_path = Some(path.into());
+        self
+    }
+
+    /// Automatically capture a screenshot after rendering and exit.
+    pub fn screenshot(mut self, path: impl Into<PathBuf>) -> Self {
+        self.screenshot_path = Some(path.into());
+        self
+    }
+
+    /// Record ingested blocks to a JSON fixture file on exit.
+    pub fn record(mut self, path: impl Into<PathBuf>) -> Self {
+        self.record_path = Some(path.into());
+        self
+    }
+
     /// Build the Bevy app with the selected configuration and plugins.
-    pub fn build(self) -> App {
-        let configs = if self.configs.is_empty() {
-            config::chain_configs()
+    pub fn build(mut self) -> App {
+        // Check env var fallbacks for fixture, screenshot, and record paths.
+        if self.fixture_path.is_none() {
+            if let Ok(val) = std::env::var("TESSERA_FIXTURE") {
+                self.fixture_path = Some(PathBuf::from(val));
+            }
+        }
+        if self.screenshot_path.is_none() {
+            if let Ok(val) = std::env::var("TESSERA_SCREENSHOT") {
+                self.screenshot_path = Some(PathBuf::from(val));
+            }
+        }
+        if self.record_path.is_none() {
+            if let Ok(val) = std::env::var("TESSERA_RECORD") {
+                self.record_path = Some(PathBuf::from(val));
+            }
+        }
+
+        let channel = if let Some(ref path) = self.fixture_path {
+            init_fixture_channel(path)
         } else {
-            self.configs
+            let configs = if self.configs.is_empty() {
+                config::chain_configs()
+            } else {
+                self.configs
+            };
+            init_multi_chain_channel(configs)
         };
-        let channel = init_multi_chain_channel(configs);
+
         let renderer = self
             .renderer
             .unwrap_or_else(|| Box::new(SlabsAndCubesRenderer::default()));
@@ -159,6 +208,16 @@ impl BlockExplorerBuilder {
 
         renderer.setup(&mut app);
         app.insert_resource(RendererResource(renderer));
+
+        if let Some(record_path) = self.record_path {
+            app.insert_resource(RecordBuffer::new(record_path))
+                .add_systems(Last, flush_record_buffer);
+        }
+
+        if let Some(screenshot_path) = self.screenshot_path {
+            app.insert_resource(ScreenshotMode::new(screenshot_path, 120))
+                .add_plugins(screenshot_plugin);
+        }
 
         if self.enable_fly_camera {
             app.add_plugins(fly_camera_plugin);

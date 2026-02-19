@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 
 use alloy_chains::Chain;
 
-use crate::data::BlockChannel;
+use crate::data::{BlockChannel, RecordBuffer};
 use crate::render::RendererResource;
 use crate::scene::blob_links::BlobLinkRegistry;
 use crate::scene::BlockLabel;
@@ -184,12 +184,17 @@ pub fn ingest_blocks(
     mut images: ResMut<Assets<Image>>,
     mut registry: ResMut<BlockRegistry>,
     blob_links: Option<ResMut<BlobLinkRegistry>>,
+    mut record_buffer: Option<ResMut<RecordBuffer>>,
 ) {
     let mut received = 0usize;
     let mut blob_links = blob_links;
     while received < MAX_BLOCKS_PER_FRAME {
         match channel.0.try_recv() {
             Ok(payload) => {
+                if let Some(ref mut buf) = record_buffer {
+                    buf.payloads.push(payload.clone());
+                }
+
                 hud_state.update_from_payload(&payload);
 
                 if let (Some(l1_origin), Some(ref mut links)) =
@@ -212,6 +217,18 @@ pub fn ingest_blocks(
                 received += 1;
             }
             Err(_) => break,
+        }
+    }
+}
+
+/// Flushes the record buffer to disk when the app exits.
+pub fn flush_record_buffer(
+    mut exit_events: EventReader<AppExit>,
+    buffer: Option<Res<RecordBuffer>>,
+) {
+    if exit_events.read().next().is_some() {
+        if let Some(buf) = buffer {
+            buf.flush();
         }
     }
 }

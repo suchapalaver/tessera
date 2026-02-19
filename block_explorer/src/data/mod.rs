@@ -8,7 +8,9 @@ use alloy_chains::{Chain, NamedChain};
 use crossbeam_channel::Receiver;
 use url::Url;
 
-pub use channel::{init_block_channel, init_multi_chain_channel, BlockChannel};
+pub use channel::{
+    init_block_channel, init_fixture_channel, init_multi_chain_channel, BlockChannel, RecordBuffer,
+};
 pub use model::{BlockPayload, OpStackFees, TxPayload};
 
 /// Returns true if the chain is an OP Stack L2 (Base, Optimism).
